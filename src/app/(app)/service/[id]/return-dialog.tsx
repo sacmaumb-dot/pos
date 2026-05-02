@@ -61,6 +61,9 @@ export function ReturnDialog({
   initialFinalCost,
   initialPaid,
   products,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
 }: {
   ticketId: string;
   ticketCode: string;
@@ -69,9 +72,17 @@ export function ReturnDialog({
   initialFinalCost: number;
   initialPaid: number;
   products: Product[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    onOpenChange?.(v);
+  };
   const [pending, startTransition] = useTransition();
   const [extras, setExtras] = useState<ExtraDraft[]>([]);
   const [solution, setSolution] = useState("");
@@ -183,10 +194,12 @@ export function ReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button className="w-full" size="lg" />}>
-        <PackageCheck className="size-4" />
-        Trả máy & Thanh toán
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger render={<Button className="w-full" size="lg" />}>
+          <PackageCheck className="size-4" />
+          Trả máy & Thanh toán
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Trả máy & Thanh toán</DialogTitle>

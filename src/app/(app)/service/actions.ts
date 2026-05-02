@@ -146,27 +146,64 @@ export async function updateServiceStatus(
 export async function updateServiceTicket(
   ticketId: string,
   data: {
+    deviceType?: string;
+    deviceBrand?: string | null;
+    deviceModel?: string | null;
+    imei?: string | null;
+    accessories?: string | null;
+    appearance?: string | null;
+    problem?: string;
     diagnosis?: string;
     solution?: string;
     estimatedCost?: number;
     finalCost?: number;
     paid?: number;
+    deposit?: number;
     warranty?: number;
-    assignedToId?: string;
+    assignedToId?: string | null;
     promisedAt?: string | null;
     note?: string;
+    customerName?: string;
+    customerPhone?: string;
   },
 ) {
   try {
     await requireSession();
+    const { customerName, customerPhone, promisedAt, assignedToId, ...rest } =
+      data;
     await prisma.serviceTicket.update({
       where: { id: ticketId },
       data: {
-        ...data,
-        promisedAt: data.promisedAt ? new Date(data.promisedAt) : undefined,
-        assignedToId: data.assignedToId || null,
+        ...rest,
+        promisedAt:
+          promisedAt === undefined
+            ? undefined
+            : promisedAt
+              ? new Date(promisedAt)
+              : null,
+        assignedToId:
+          assignedToId === undefined
+            ? undefined
+            : assignedToId
+              ? assignedToId
+              : null,
       },
     });
+    if (customerName !== undefined || customerPhone !== undefined) {
+      const ticket = await prisma.serviceTicket.findUnique({
+        where: { id: ticketId },
+        select: { customerId: true },
+      });
+      if (ticket) {
+        await prisma.customer.update({
+          where: { id: ticket.customerId },
+          data: {
+            ...(customerName !== undefined ? { name: customerName } : {}),
+            ...(customerPhone !== undefined ? { phone: customerPhone } : {}),
+          },
+        });
+      }
+    }
     revalidatePath(`/service/${ticketId}`);
     return { ok: true as const };
   } catch (e) {
