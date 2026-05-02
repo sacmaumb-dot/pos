@@ -23,9 +23,10 @@ import {
   type PickerProduct,
 } from "@/components/product-picker-input";
 import { toast } from "sonner";
-import { Loader2, Plus, Save, Trash2, Wrench, Printer } from "lucide-react";
+import { Loader2, Plus, Trash2, Wrench, Printer, User } from "lucide-react";
 import { createServiceTicket } from "./actions";
 import { formatVND } from "@/lib/format";
+import { printInBackground } from "@/lib/print";
 
 type Customer = { id: string; code: string; name: string; phone: string };
 type Technician = { id: string; name: string };
@@ -79,7 +80,7 @@ export function ServiceForm({
   ]);
   const [deposit, setDeposit] = useState<string>("");
   const [assignedToId, setAssignedToId] = useState<string>("");
-  const [promisedAt, setPromisedAt] = useState("");
+  const [promisedAt, setPromisedAt] = useState(() => defaultPromisedAt());
   const [note, setNote] = useState("");
 
   function setDev<K extends keyof typeof device>(k: K, v: string) {
@@ -113,7 +114,7 @@ export function ServiceForm({
     0,
   );
 
-  function submit(e: React.FormEvent, opts: { print: boolean }) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     if (customer.mode === "none") {
       toast.error("Vui lòng nhập SĐT khách hàng");
@@ -167,13 +168,9 @@ export function ServiceForm({
       const res = await createServiceTicket(payload);
       if (res.ok) {
         toast.success(`Tạo phiếu ${res.code} thành công!`);
+        await printInBackground(`/service/${res.id}/intake`);
         if (onCreated) {
-          if (opts.print) {
-            window.open(`/service/${res.id}/intake?print=1`, "_blank");
-          }
-          onCreated({ id: res.id, code: res.code, print: opts.print });
-        } else if (opts.print) {
-          router.push(`/service/${res.id}/intake?print=1`);
+          onCreated({ id: res.id, code: res.code, print: true });
         } else {
           router.push(`/service/${res.id}`);
         }
@@ -184,22 +181,8 @@ export function ServiceForm({
   }
 
   return (
-    <form onSubmit={(e) => submit(e, { print: false })} className="space-y-4">
-      <Card className="overflow-visible">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Khách hàng</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CustomerPhoneField
-            customers={customers}
-            value={customer}
-            onChange={setCustomer}
-            label="Số điện thoại khách hàng"
-            required
-          />
-        </CardContent>
-      </Card>
-
+    <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2 space-y-4">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Thông tin thiết bị</CardTitle>
@@ -256,7 +239,7 @@ export function ServiceForm({
             <Textarea
               value={device.problem}
               onChange={(e) => setDev("problem", e.target.value)}
-              rows={2}
+              rows={3}
               placeholder="VD: Máy lỗi win, không lên hình. Yêu cầu cài lại win + kiểm tra phần cứng."
               required
             />
@@ -351,9 +334,57 @@ export function ServiceForm({
             </div>
           ))}
 
-          <Separator className="my-2" />
+        </CardContent>
+      </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Ghi chú nội bộ</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="VD: Khách khó tính, cần báo trước khi sửa..."
+          />
+        </CardContent>
+      </Card>
+      </div>
+
+      <div className="lg:col-span-1 space-y-4">
+        <Card className="overflow-visible">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <User className="size-4 text-primary" />
+              <CardTitle className="text-base">Khách hàng</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CustomerPhoneField
+              customers={customers}
+              value={customer}
+              onChange={setCustomer}
+              label="Số điện thoại"
+              required
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-visible">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Tất toán</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between rounded-md bg-primary/5 p-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Wrench className="size-4 text-primary" />
+                <span className="font-medium">Tổng báo giá dự kiến</span>
+              </div>
+              <span className="text-base font-bold text-primary">
+                {formatVND(estimatedCost)}
+              </span>
+            </div>
             <Field label="Đặt cọc (VND)">
               <Input
                 type="number"
@@ -383,54 +414,40 @@ export function ServiceForm({
                 className="w-full"
               />
             </Field>
-          </div>
-
-          <div className="flex items-center justify-between rounded-md bg-primary/5 p-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Wrench className="size-4 text-primary" />
-              <span>Tổng báo giá dự kiến</span>
-            </div>
-            <span className="text-base font-bold text-primary">
-              {formatVND(estimatedCost)}
-            </span>
-          </div>
-
-          <Field label="Ghi chú nội bộ">
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-            />
-          </Field>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-          disabled={pending}
-        >
-          Huỷ
-        </Button>
-        <Button type="submit" variant="outline" disabled={pending}>
-          {pending && <Loader2 className="size-4 animate-spin" />}
-          <Save className="size-4" />
-          Lưu phiếu
-        </Button>
-        <Button
-          type="button"
-          onClick={(e) => submit(e as unknown as React.FormEvent, { print: true })}
-          disabled={pending}
-        >
-          {pending && <Loader2 className="size-4 animate-spin" />}
-          <Printer className="size-4" />
-          Lưu & In phiếu nhận
-        </Button>
+            <Separator className="my-1" />
+            <Button
+              type="submit"
+              disabled={pending}
+              className="w-full"
+              size="lg"
+            >
+              {pending && <Loader2 className="size-4 animate-spin" />}
+              <Printer className="size-4" />
+              Lưu & In phiếu nhận
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => router.back()}
+              disabled={pending}
+              className="w-full"
+              size="sm"
+            >
+              Huỷ
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </form>
   );
+}
+
+function defaultPromisedAt() {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  d.setHours(17, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function Field({

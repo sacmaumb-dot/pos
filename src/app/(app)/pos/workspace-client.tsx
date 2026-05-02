@@ -100,13 +100,13 @@ export function WorkspaceClient({
     const ticketId = searchParams.get("ticket");
     const ticketCode = searchParams.get("code");
     if (ticketId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       openTicketTab(ticketId, ticketCode || "Phiếu");
       const url = new URL(window.location.href);
       url.searchParams.delete("ticket");
       url.searchParams.delete("code");
       window.history.replaceState({}, "", url.toString());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   function closeTab(id: string) {

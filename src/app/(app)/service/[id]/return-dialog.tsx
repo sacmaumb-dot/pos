@@ -20,6 +20,7 @@ import { SelectField } from "@/components/ui/select-field";
 import { toast } from "sonner";
 import { Loader2, PackageCheck, Plus, Trash2, Search } from "lucide-react";
 import { formatVND } from "@/lib/format";
+import { printInBackground } from "@/lib/print";
 import { deliverService } from "../actions";
 
 type Product = {
@@ -149,7 +150,7 @@ export function ReturnDialog({
   const paidThisTime = Number(paidNow) || due;
   const totalPaid = initialPaid + paidThisTime;
 
-  function submit(opts: { print: boolean }) {
+  function submit() {
     if (paidThisTime < 0) {
       toast.error("Số tiền không hợp lệ");
       return;
@@ -172,10 +173,8 @@ export function ReturnDialog({
       if (res.ok) {
         toast.success(`Đã trả máy phiếu ${ticketCode}`);
         setOpen(false);
+        await printInBackground(`/service/${ticketId}/return`);
         router.refresh();
-        if (opts.print) {
-          router.push(`/service/${ticketId}/return?print=1`);
-        }
       } else {
         toast.error(res.error || "Có lỗi xảy ra");
       }
@@ -426,15 +425,7 @@ export function ReturnDialog({
           >
             Huỷ
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => submit({ print: false })}
-            disabled={pending}
-          >
-            {pending && <Loader2 className="size-4 animate-spin" />}
-            Hoàn tất
-          </Button>
-          <Button onClick={() => submit({ print: true })} disabled={pending}>
+          <Button onClick={() => submit()} disabled={pending}>
             {pending && <Loader2 className="size-4 animate-spin" />}
             <PackageCheck className="size-4" />
             Hoàn tất & In phiếu trả

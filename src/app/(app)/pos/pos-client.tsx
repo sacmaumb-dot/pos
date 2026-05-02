@@ -35,6 +35,7 @@ import {
   Package as PackageIcon,
 } from "lucide-react";
 import { formatVND } from "@/lib/format";
+import { printInBackground } from "@/lib/print";
 import { toast } from "sonner";
 import { createSale } from "./actions";
 import {
@@ -183,7 +184,7 @@ export function PosClient({
     setOpenCheckout(true);
   }
 
-  function confirmCheckout(opts: { print: boolean }) {
+  function confirmCheckout() {
     startTransition(async () => {
       const customerPayload =
         customer.mode === "existing"
@@ -211,18 +212,12 @@ export function PosClient({
         setCustomer({ mode: "none" });
         setOpenCheckout(false);
         setOpenCart(false);
+        await printInBackground(`/sales/${res.id}`);
         if (onCreated) {
-          if (opts.print) {
-            window.open(`/sales/${res.id}?print=1`, "_blank");
-          }
-          onCreated({ id: res.id, code: res.code, print: opts.print });
+          onCreated({ id: res.id, code: res.code, print: true });
         } else {
           router.refresh();
-          if (opts.print) {
-            router.push(`/sales/${res.id}?print=1`);
-          } else {
-            router.push(`/sales/${res.id}`);
-          }
+          router.push(`/sales/${res.id}`);
         }
       } else {
         toast.error(res.error || "Có lỗi xảy ra");
@@ -423,18 +418,7 @@ export function PosClient({
             <Button variant="outline" onClick={() => setOpenCheckout(false)}>
               Huỷ
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => confirmCheckout({ print: false })}
-              disabled={pending}
-            >
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              Lưu
-            </Button>
-            <Button
-              onClick={() => confirmCheckout({ print: true })}
-              disabled={pending}
-            >
+            <Button onClick={() => confirmCheckout()} disabled={pending}>
               {pending && <Loader2 className="size-4 animate-spin" />}
               <Receipt className="size-4" />
               Lưu & In bill

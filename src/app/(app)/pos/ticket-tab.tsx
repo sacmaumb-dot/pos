@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Printer, User, Wrench } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { Loader2, Printer, User, Wrench, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -9,14 +10,24 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  ProductPickerInput,
+  type PickerProduct,
+} from "@/components/product-picker-input";
 import { ServiceStatusBadge } from "@/components/service-status-badge";
 import { ServiceStatusActions } from "../service/[id]/service-status-actions";
 import { ServiceUpdateForm } from "../service/[id]/service-update-form";
 import { ReturnDialog } from "../service/[id]/return-dialog";
-import { getTicketForTab } from "../service/actions";
+import {
+  getTicketForTab,
+  addServiceItems,
+  removeServiceItem,
+} from "../service/actions";
 import { formatVND, formatDateTime } from "@/lib/format";
+import { printInBackground } from "@/lib/print";
 
 type Technician = { id: string; name: string };
 type Product = {
@@ -63,6 +74,7 @@ export function TicketTab({
 
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     getTicketForTab(ticketId).then((res) => {
       if (!alive) return;
@@ -125,15 +137,17 @@ export function TicketTab({
               </div>
               <div className="flex items-center gap-2">
                 <ServiceStatusBadge status={ticket.status} />
-                <a
-                  href={`/service/${ticket.id}/intake?print=1`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    printInBackground(`/service/${ticket.id}/intake`)
+                  }
                 >
                   <Printer className="size-3.5" />
                   In phiếu nhận
-                </a>
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -171,37 +185,66 @@ export function TicketTab({
               </div>
               <p className="text-sm whitespace-pre-wrap">{ticket.problem}</p>
             </div>
-            {ticket.items.length > 0 && (
-              <>
-                <Separator />
-                <div>
-                  <div className="text-[11px] uppercase text-muted-foreground tracking-wide mb-1.5">
-                    Báo giá ({ticket.items.length} mục) ·{" "}
-                    {formatVND(itemsTotal)}
-                  </div>
-                  <div className="rounded-md border divide-y text-xs">
-                    {ticket.items.map((it) => (
-                      <div
-                        key={it.id}
-                        className="flex items-center justify-between gap-3 px-2.5 py-1.5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium truncate">
-                            {it.description}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {it.quantity} × {formatVND(it.unitPrice)}
-                          </div>
+            <Separator />
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[11px] uppercase text-muted-foreground tracking-wide">
+                  Báo giá ({ticket.items.length} mục) ·{" "}
+                  {formatVND(itemsTotal)}
+                </div>
+              </div>
+              {ticket.items.length > 0 ? (
+                <div className="rounded-md border divide-y text-xs">
+                  {ticket.items.map((it) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center gap-3 px-2.5 py-1.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">
+                          {it.description}
                         </div>
-                        <div className="font-semibold shrink-0">
-                          {formatVND(it.subtotal)}
+                        <div className="text-[10px] text-muted-foreground">
+                          {it.quantity} × {formatVND(it.unitPrice)}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                      <div className="font-semibold shrink-0">
+                        {formatVND(it.subtotal)}
+                      </div>
+                      {!isDelivered && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const r = await removeServiceItem(it.id);
+                            if (r.ok) {
+                              toast.success("Đã xoá");
+                              setVersion((v) => v + 1);
+                            } else {
+                              toast.error(r.error || "Lỗi");
+                            }
+                          }}
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label="Xoá"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
+              ) : (
+                <div className="text-xs text-muted-foreground italic">
+                  Chưa có dịch vụ nào.
+                </div>
+              )}
+              {!isDelivered && (
+                <AddItemRow
+                  ticketId={ticket.id}
+                  products={products}
+                  onAdded={() => setVersion((v) => v + 1)}
+                />
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -312,6 +355,104 @@ function Info({
         {label}
       </div>
       <div className="text-xs">{children}</div>
+    </div>
+  );
+}
+
+function AddItemRow({
+  ticketId,
+  products,
+  onAdded,
+}: {
+  ticketId: string;
+  products: PickerProduct[];
+  onAdded: () => void;
+}) {
+  const [productId, setProductId] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [pending, startTransition] = useTransition();
+
+  function reset() {
+    setProductId(null);
+    setDescription("");
+    setQuantity(1);
+    setUnitPrice(0);
+  }
+
+  function handleAdd() {
+    if (!description.trim()) {
+      toast.error("Chọn dịch vụ hoặc nhập tên");
+      return;
+    }
+    startTransition(async () => {
+      const r = await addServiceItems(ticketId, [
+        { productId, description: description.trim(), quantity, unitPrice },
+      ]);
+      if (r.ok) {
+        toast.success("Đã thêm");
+        reset();
+        onAdded();
+      } else {
+        toast.error(r.error || "Lỗi");
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2 grid grid-cols-12 gap-1.5 items-start">
+      <div className="col-span-12 sm:col-span-6">
+        <ProductPickerInput
+          products={products}
+          value={description}
+          onTextChange={(t) => {
+            setDescription(t);
+            setProductId(null);
+          }}
+          onSelect={(p) => {
+            setProductId(p.id);
+            setDescription(p.name);
+            setUnitPrice(p.price);
+          }}
+          placeholder="Tìm dịch vụ / sản phẩm trong kho..."
+        />
+      </div>
+      <div className="col-span-3 sm:col-span-2">
+        <Input
+          type="number"
+          min={1}
+          value={quantity}
+          onChange={(e) => setQuantity(Number(e.target.value) || 1)}
+          placeholder="SL"
+        />
+      </div>
+      <div className="col-span-5 sm:col-span-3">
+        <Input
+          type="number"
+          min={0}
+          step={1000}
+          value={unitPrice || ""}
+          onChange={(e) => setUnitPrice(Number(e.target.value) || 0)}
+          placeholder="Đơn giá"
+        />
+      </div>
+      <div className="col-span-4 sm:col-span-1">
+        <Button
+          type="button"
+          size="icon"
+          onClick={handleAdd}
+          disabled={pending}
+          aria-label="Thêm dịch vụ"
+          className="w-full"
+        >
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Plus className="size-4" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

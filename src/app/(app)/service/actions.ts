@@ -182,6 +182,79 @@ type ReturnItemInput = {
   productId?: string | null;
 };
 
+export async function addServiceItems(
+  ticketId: string,
+  items: ReturnItemInput[],
+) {
+  try {
+    await requireSession();
+    const ticket = await prisma.serviceTicket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, status: true },
+    });
+    if (!ticket) return { ok: false as const, error: "Phiếu không tồn tại" };
+    if (ticket.status === "delivered") {
+      return { ok: false as const, error: "Phiếu đã trả máy" };
+    }
+    await prisma.$transaction(async (tx) => {
+      for (const it of items) {
+        if (!it.description || it.quantity <= 0) continue;
+        await tx.serviceItem.create({
+          data: {
+            ticketId,
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            subtotal: it.unitPrice * it.quantity,
+            productId: it.productId || null,
+          },
+        });
+      }
+      const all = await tx.serviceItem.findMany({ where: { ticketId } });
+      const total = all.reduce((s, i) => s + i.subtotal, 0);
+      await tx.serviceTicket.update({
+        where: { id: ticketId },
+        data: { estimatedCost: total },
+      });
+    });
+    revalidatePath(`/service/${ticketId}`);
+    return { ok: true as const };
+  } catch (e) {
+    console.error(e);
+    return { ok: false as const, error: "Thêm dịch vụ thất bại" };
+  }
+}
+
+export async function removeServiceItem(itemId: string) {
+  try {
+    await requireSession();
+    const item = await prisma.serviceItem.findUnique({
+      where: { id: itemId },
+      include: { ticket: { select: { id: true, status: true } } },
+    });
+    if (!item) return { ok: false as const, error: "Mục không tồn tại" };
+    if (item.ticket.status === "delivered") {
+      return { ok: false as const, error: "Phiếu đã trả máy" };
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceItem.delete({ where: { id: itemId } });
+      const all = await tx.serviceItem.findMany({
+        where: { ticketId: item.ticketId },
+      });
+      const total = all.reduce((s, i) => s + i.subtotal, 0);
+      await tx.serviceTicket.update({
+        where: { id: item.ticketId },
+        data: { estimatedCost: total },
+      });
+    });
+    revalidatePath(`/service/${item.ticketId}`);
+    return { ok: true as const };
+  } catch (e) {
+    console.error(e);
+    return { ok: false as const, error: "Xoá mục thất bại" };
+  }
+}
+
 export async function deliverService(input: {
   ticketId: string;
   extraItems: ReturnItemInput[];
