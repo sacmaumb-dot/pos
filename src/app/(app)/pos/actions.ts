@@ -27,6 +27,12 @@ export async function createSale(input: {
     }
 
     let resolvedCustomerId: string | null = input.customerId || null;
+    if (!resolvedCustomerId && (!input.newCustomer || !input.newCustomer.phone?.trim() || !input.newCustomer.name?.trim())) {
+      return {
+        ok: false as const,
+        error: "Vui lòng chọn hoặc thêm khách hàng (SĐT + tên)",
+      };
+    }
     if (!resolvedCustomerId && input.newCustomer && input.newCustomer.name.trim()) {
       const phone = input.newCustomer.phone.trim();
       const name = input.newCustomer.name.trim();

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -14,7 +15,9 @@ import {
   ClipboardList,
   ChevronDown,
   Receipt,
+  Search,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +34,7 @@ type PendingTicket = {
   id: string;
   code: string;
   customerName: string;
+  customerPhone: string;
   deviceLabel: string;
   status: string;
 };
@@ -50,6 +54,19 @@ export function AppHeader({
   user: SessionUser;
   pendingTickets: PendingTicket[];
 }) {
+  const [pendingQ, setPendingQ] = useState("");
+  const filteredPending = useMemo(() => {
+    const s = pendingQ.trim().toLowerCase();
+    if (!s) return pendingTickets;
+    return pendingTickets.filter(
+      (t) =>
+        t.customerPhone.toLowerCase().includes(s) ||
+        t.customerName.toLowerCase().includes(s) ||
+        t.deviceLabel.toLowerCase().includes(s) ||
+        t.code.toLowerCase().includes(s),
+    );
+  }, [pendingTickets, pendingQ]);
+
   const navData = [
     { title: "Tổng quan", url: "/", icon: LayoutDashboard },
     { title: "Hoá đơn bán hàng", url: "/sales", icon: Receipt },
@@ -98,40 +115,61 @@ export function AppHeader({
             {pendingTickets.length}
           </Badge>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-auto">
-          <div className="px-1.5 py-1 text-xs font-medium text-muted-foreground">
-            Phiếu sửa chữa chưa trả ({pendingTickets.length})
-          </div>
-          <DropdownMenuSeparator />
-          {pendingTickets.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-              Không có phiếu nào đang chờ.
+        <DropdownMenuContent align="end" className="w-80 p-0">
+          <div className="px-2 pt-2 pb-1.5">
+            <div className="text-xs font-medium text-muted-foreground mb-1.5">
+              Phiếu chưa trả ({pendingTickets.length})
             </div>
-          )}
-          {pendingTickets.map((t) => (
-            <DropdownMenuItem
-              key={t.id}
-              render={
-                <Link
-                  href={`/pos?ticket=${t.id}&code=${encodeURIComponent(t.code)}`}
-                />
-              }
-              className="flex flex-col items-start gap-0.5 py-2 cursor-pointer"
-            >
-              <div className="flex w-full items-center justify-between gap-2">
-                <span className="font-mono text-xs font-semibold">{t.code}</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {STATUS_LABEL[t.status] || t.status}
-                </Badge>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+              <Input
+                value={pendingQ}
+                onChange={(e) => setPendingQ(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Tìm SĐT, model, mã phiếu..."
+                className="pl-8 h-8"
+              />
+            </div>
+          </div>
+          <DropdownMenuSeparator className="my-0" />
+          <div className="max-h-80 overflow-auto py-1">
+            {filteredPending.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                {pendingTickets.length === 0
+                  ? "Không có phiếu nào đang chờ."
+                  : "Không có phiếu khớp."}
               </div>
-              <span className="text-xs font-medium truncate w-full">
-                {t.customerName}
-              </span>
-              <span className="text-[10px] text-muted-foreground truncate w-full">
-                {t.deviceLabel}
-              </span>
-            </DropdownMenuItem>
-          ))}
+            )}
+            {filteredPending.map((t) => (
+              <DropdownMenuItem
+                key={t.id}
+                render={
+                  <Link
+                    href={`/pos?ticket=${t.id}&code=${encodeURIComponent(t.code)}`}
+                  />
+                }
+                className="flex flex-col items-start gap-0.5 py-2 cursor-pointer"
+              >
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-semibold">
+                    {t.code}
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {STATUS_LABEL[t.status] || t.status}
+                  </Badge>
+                </div>
+                <span className="text-xs font-medium truncate w-full">
+                  {t.customerName}
+                  <span className="ml-1.5 text-[10px] font-mono text-muted-foreground">
+                    {t.customerPhone}
+                  </span>
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate w-full">
+                  {t.deviceLabel}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 

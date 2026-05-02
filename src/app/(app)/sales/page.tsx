@@ -1,16 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -18,7 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import Link from "next/link";
 import { formatVND, formatDateTime } from "@/lib/format";
-import { ShoppingCart, Plus } from "lucide-react";
+import {
+  ShoppingCart,
+  Plus,
+  Wrench,
+  Receipt,
+  TrendingUp,
+  ChevronRight,
+} from "lucide-react";
+import { SalesFilter } from "./sales-filter";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
@@ -27,110 +26,260 @@ const PAYMENT_LABELS: Record<string, string> = {
   wallet: "Ví ĐT",
 };
 
-export default async function SalesPage() {
-  const sales = await prisma.sale.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      customer: { select: { name: true, phone: true } },
-      user: { select: { name: true } },
-      items: { select: { id: true } },
-    },
-    take: 100,
-  });
+type Row = {
+  id: string;
+  code: string;
+  type: "sale" | "service";
+  createdAt: Date;
+  customerName: string | null;
+  customerPhone: string | null;
+  itemCount: number;
+  paymentMethod: string | null;
+  total: number;
+  href: string;
+  device?: string;
+};
+
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; type?: string }>;
+}) {
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim();
+  const type = sp.type ?? "all";
+
+  const wantSale = type === "all" || type === "sale";
+  const wantService = type === "all" || type === "service";
+
+  const [sales, tickets] = await Promise.all([
+    wantSale
+      ? prisma.sale.findMany({
+          orderBy: { createdAt: "desc" },
+          include: {
+            customer: { select: { name: true, phone: true } },
+            items: { select: { id: true } },
+          },
+          take: 200,
+        })
+      : Promise.resolve([]),
+    wantService
+      ? prisma.serviceTicket.findMany({
+          where: { status: "delivered" },
+          orderBy: { deliveredAt: "desc" },
+          include: {
+            customer: { select: { name: true, phone: true } },
+            items: { select: { id: true } },
+          },
+          take: 200,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const rows: Row[] = [
+    ...sales.map((s) => ({
+      id: s.id,
+      code: s.code,
+      type: "sale" as const,
+      createdAt: s.createdAt,
+      customerName: s.customer?.name ?? null,
+      customerPhone: s.customer?.phone ?? null,
+      itemCount: s.items.length,
+      paymentMethod: s.paymentMethod,
+      total: s.total,
+      href: `/sales/${s.id}`,
+    })),
+    ...tickets.map((t) => ({
+      id: t.id,
+      code: t.code.replace(/^SC/, "HDSC"),
+      type: "service" as const,
+      createdAt: t.deliveredAt ?? t.createdAt,
+      customerName: t.customer?.name ?? null,
+      customerPhone: t.customer?.phone ?? null,
+      itemCount: t.items.length,
+      paymentMethod: t.paymentMethod,
+      total: t.finalCost,
+      href: `/service/${t.id}`,
+      device: [t.deviceBrand, t.deviceModel].filter(Boolean).join(" ") || undefined,
+    })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  const filtered = q
+    ? rows.filter((r) => {
+        const s = q.toLowerCase();
+        return (
+          r.code.toLowerCase().includes(s) ||
+          (r.customerName ?? "").toLowerCase().includes(s) ||
+          (r.customerPhone ?? "").toLowerCase().includes(s) ||
+          (r.device ?? "").toLowerCase().includes(s)
+        );
+      })
+    : rows;
+
+  const total = filtered.reduce((s, r) => s + r.total, 0);
+  const saleCount = filtered.filter((r) => r.type === "sale").length;
+  const serviceCount = filtered.filter((r) => r.type === "service").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Đơn hàng</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Hoá đơn</h1>
           <p className="text-sm text-muted-foreground">
-            Danh sách hoá đơn bán hàng đã tạo.
+            HD bán hàng và HDSC sửa chữa đã hoàn tất.
           </p>
         </div>
         <Link href="/pos" className={buttonVariants()}>
           <Plus className="size-4" />
-          Tạo đơn mới
+          Tạo phiếu mới
         </Link>
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi
+          icon={<Receipt className="size-4" />}
+          label="Tổng HĐ"
+          value={String(filtered.length)}
+        />
+        <Kpi
+          icon={<TrendingUp className="size-4" />}
+          label="Tổng doanh thu"
+          value={formatVND(total)}
+          tone="primary"
+        />
+        <Kpi
+          icon={<ShoppingCart className="size-4" />}
+          label="Bán hàng"
+          value={String(saleCount)}
+        />
+        <Kpi
+          icon={<Wrench className="size-4" />}
+          label="Sửa chữa"
+          value={String(serviceCount)}
+        />
+      </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="size-4" />
-            {sales.length} hoá đơn gần nhất
+        <CardHeader className="border-b pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="size-4" />
+            Danh sách ({filtered.length})
           </CardTitle>
-          <CardDescription>
-            Bấm vào mã hoá đơn để xem chi tiết.
-          </CardDescription>
+          <SalesFilter />
         </CardHeader>
-        <CardContent className="px-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mã HĐ</TableHead>
-                  <TableHead>Thời gian</TableHead>
-                  <TableHead>Khách hàng</TableHead>
-                  <TableHead>Nhân viên</TableHead>
-                  <TableHead>SL</TableHead>
-                  <TableHead>Thanh toán</TableHead>
-                  <TableHead className="text-right">Tổng tiền</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sales.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Chưa có hoá đơn nào.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sales.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono font-medium">
-                      <Link
-                        href={`/sales/${s.id}`}
-                        className="text-primary hover:underline"
-                      >
-                        {s.code}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {formatDateTime(s.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      {s.customer ? (
-                        <div>
-                          <div className="text-sm">{s.customer.name}</div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {s.customer.phone}
-                          </div>
-                        </div>
+        <CardContent className="p-3">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              Không có hoá đơn nào.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {filtered.map((r) => (
+                <Link
+                  key={`${r.type}-${r.id}`}
+                  href={r.href}
+                  className="rounded-md border bg-card hover:border-primary/60 hover:shadow-sm transition-all p-3 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`size-9 shrink-0 rounded flex items-center justify-center ${
+                        r.type === "sale"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      }`}
+                    >
+                      {r.type === "sale" ? (
+                        <ShoppingCart className="size-4" />
                       ) : (
-                        <span className="text-muted-foreground text-sm">
-                          Khách lẻ
-                        </span>
+                        <Wrench className="size-4" />
                       )}
-                    </TableCell>
-                    <TableCell className="text-sm">{s.user.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{s.items.length}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {PAYMENT_LABELS[s.paymentMethod] || s.paymentMethod}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatVND(s.total)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-sm font-semibold">
+                          {r.code}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] h-4 px-1"
+                        >
+                          {r.type === "sale" ? "Bán hàng" : "Sửa chữa"}
+                        </Badge>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {formatDateTime(r.createdAt)}
+                      </div>
+                    </div>
+                    <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition" />
+                  </div>
+                  <div className="mt-2 flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium truncate">
+                        {r.customerName || "Khách lẻ"}
+                      </div>
+                      {r.customerPhone && (
+                        <div className="text-[11px] text-muted-foreground font-mono">
+                          {r.customerPhone}
+                        </div>
+                      )}
+                      {r.device && (
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {r.device}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold text-primary">
+                        {formatVND(r.total)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {r.itemCount} mục •{" "}
+                        {PAYMENT_LABELS[r.paymentMethod ?? ""] ||
+                          r.paymentMethod ||
+                          "—"}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function Kpi({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "primary";
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div
+          className={`size-10 rounded-md flex items-center justify-center ${
+            tone === "primary"
+              ? "bg-primary/10 text-primary"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+            {label}
+          </div>
+          <div className="text-base font-bold truncate">{value}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

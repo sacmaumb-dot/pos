@@ -35,8 +35,11 @@ export async function createServiceTicket(input: {
     } else {
       const phone = input.customer.phone.trim();
       const name = input.customer.name.trim();
-      if (!phone) {
-        return { ok: false as const, error: "SĐT khách hàng không hợp lệ" };
+      if (!phone || !name) {
+        return {
+          ok: false as const,
+          error: "Vui lòng nhập đầy đủ SĐT và tên khách hàng",
+        };
       }
       const existing = await prisma.customer.findFirst({ where: { phone } });
       if (existing) {

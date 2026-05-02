@@ -177,6 +177,10 @@ export function PosClient({
       toast.error("Giỏ hàng trống");
       return;
     }
+    if (customer.mode === "none") {
+      toast.error("Vui lòng nhập SĐT khách hàng");
+      return;
+    }
     if (customer.mode === "new" && !customer.name.trim()) {
       toast.error("Vui lòng nhập tên khách hàng mới");
       return;

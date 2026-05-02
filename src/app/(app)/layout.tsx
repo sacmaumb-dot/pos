@@ -25,6 +25,7 @@ export default async function AppLayout({
     id: t.id,
     code: t.code,
     customerName: t.customer.name,
+    customerPhone: t.customer.phone,
     deviceLabel: [t.deviceBrand, t.deviceModel].filter(Boolean).join(" ") ||
       t.deviceType,
     status: t.status,
