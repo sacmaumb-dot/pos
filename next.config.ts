@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: [
+    "*.devinapps.com",
+    "*.trycloudflare.com",
+  ],
   experimental: {
     serverActions: {
       allowedOrigins: [
