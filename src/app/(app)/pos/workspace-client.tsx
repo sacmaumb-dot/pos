@@ -82,18 +82,22 @@ export function WorkspaceClient({
   }
 
   function openTicketTab(ticketId: string, code: string) {
+    const existing = tabs.find(
+      (t) => t.type === "ticket" && t.ticketId === ticketId,
+    );
+    if (existing) {
+      setActiveId(existing.id);
+      return;
+    }
+    const id = nextId();
     setTabs((curr) => {
-      const existing = curr.find(
-        (t) => t.type === "ticket" && t.ticketId === ticketId,
-      );
-      if (existing) {
-        setActiveId(existing.id);
+      // guard against duplicate from concurrent calls / strict-mode double-invoke
+      if (curr.some((t) => t.type === "ticket" && t.ticketId === ticketId)) {
         return curr;
       }
-      const id = nextId();
-      setActiveId(id);
       return [...curr, { id, type: "ticket", label: code, ticketId }];
     });
+    setActiveId(id);
   }
 
   useEffect(() => {
