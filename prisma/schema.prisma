@@ -44,6 +44,25 @@ model User {
   sales          Sale[]
   serviceTickets ServiceTicket[] @relation("CreatedBy")
   serviceAssigned ServiceTicket[] @relation("AssignedTo")
+  stockMovements StockMovement[]
+  notifications  Notification[]
+}
+
+// ============================================
+// NOTIFICATIONS (real-time alerts)
+// ============================================
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   // recipient
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // ticket_assigned | ticket_status | low_stock | other
+  title     String
+  body      String?
+  link      String?  // URL to navigate when clicked
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
 }
 
 // ============================================
@@ -95,6 +114,30 @@ model Product {
 
   saleItems    SaleItem[]
   serviceItems ServiceItem[]
+  movements    StockMovement[]
+}
+
+// ============================================
+// STOCK MOVEMENTS (Nhập / Xuất / Kiểm kho)
+// ============================================
+model StockMovement {
+  id        String   @id @default(cuid())
+  type      String   // in | out | adjust
+  quantity  Int      // delta — positive for in, negative for out, signed for adjust
+  before    Int      // stock before
+  after     Int      // stock after
+  unitCost  Float    @default(0) // for "in" — giá nhập
+  reason    String?  // mua hàng / xuất sửa chữa / kiểm kê thiếu...
+  reference String?  // mã NCC / mã phiếu liên quan
+  createdAt DateTime @default(now())
+
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
 }
 
 // ============================================

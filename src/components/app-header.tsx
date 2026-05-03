@@ -30,6 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth";
 import Image from "next/image";
+import { NotificationBell } from "@/components/notification-bell";
+import { GlobalSearch } from "@/components/global-search";
 
 type PendingTicket = {
   id: string;
@@ -79,6 +81,7 @@ export function AppHeader({
     { title: "Hoá đơn bán hàng", url: "/sales", icon: Receipt },
     { title: "Phiếu sửa chữa", url: "/service", icon: Wrench },
     { title: "Sản phẩm / Kho", url: "/products", icon: Package },
+    { title: "Nhập / Xuất / Kiểm kê", url: "/stock", icon: ClipboardList },
     { title: "Khách hàng", url: "/customers", icon: Users },
     { title: "Báo cáo", url: "/reports", icon: BarChart3 },
   ];
@@ -124,6 +127,10 @@ export function AppHeader({
       </Link>
 
       <div className="flex-1" />
+
+      <GlobalSearch />
+
+      <NotificationBell />
 
       <DropdownMenu>
         <DropdownMenuTrigger className="relative inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium border hover:bg-muted">

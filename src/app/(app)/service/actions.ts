@@ -3,6 +3,17 @@
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { createNotification, notifyAdmins } from "@/lib/notifications";
+
+const STATUS_LABEL: Record<string, string> = {
+  received: "Đã nhận",
+  diagnosing: "Đang chẩn đoán",
+  waiting_parts: "Chờ linh kiện",
+  repairing: "Đang sửa",
+  completed: "Đã xong, chờ trả",
+  delivered: "Đã trả máy",
+  cancelled: "Đã huỷ",
+};
 
 type CustomerInput =
   | { id: string }
@@ -104,6 +115,29 @@ export async function createServiceTicket(input: {
       },
     });
 
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { name: true, phone: true },
+    });
+    const deviceLabel =
+      [input.device.brand, input.device.model].filter(Boolean).join(" ") ||
+      input.device.type;
+    if (input.assignedToId && input.assignedToId !== session.id) {
+      await createNotification({
+        userId: input.assignedToId,
+        type: "ticket_assigned",
+        title: `Bạn được giao phiếu ${ticket.code}`,
+        body: `${customer?.name ?? ""} · ${deviceLabel} — ${input.device.problem}`,
+        link: `/pos?ticket=${ticket.id}&code=${ticket.code}`,
+      });
+    }
+    await notifyAdmins({
+      type: "ticket_created",
+      title: `Phiếu mới ${ticket.code}`,
+      body: `${customer?.name ?? ""} · ${deviceLabel}`,
+      link: `/service/${ticket.id}`,
+    });
+
     revalidatePath("/service");
     revalidatePath("/");
     return { ok: true as const, id: ticket.id, code: ticket.code };
@@ -119,7 +153,7 @@ export async function updateServiceStatus(
   note: string,
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     await prisma.$transaction(async (tx) => {
       const data: {
         status: string;
@@ -136,6 +170,29 @@ export async function updateServiceStatus(
         data: { ticketId, status, note: note || null },
       });
     });
+
+    const ticket = await prisma.serviceTicket.findUnique({
+      where: { id: ticketId },
+      include: { customer: true },
+    });
+    if (ticket) {
+      const label = STATUS_LABEL[status] || status;
+      const targets = new Set<string>();
+      if (ticket.assignedToId && ticket.assignedToId !== session.id)
+        targets.add(ticket.assignedToId);
+      if (ticket.createdById && ticket.createdById !== session.id)
+        targets.add(ticket.createdById);
+      for (const userId of targets) {
+        await createNotification({
+          userId,
+          type: "ticket_status",
+          title: `${ticket.code} → ${label}`,
+          body: `${ticket.customer.name} · ${[ticket.deviceBrand, ticket.deviceModel].filter(Boolean).join(" ") || ticket.deviceType}${note ? ` — ${note}` : ""}`,
+          link: `/pos?ticket=${ticket.id}&code=${ticket.code}`,
+        });
+      }
+    }
+
     revalidatePath(`/service/${ticketId}`);
     revalidatePath("/service");
     revalidatePath("/");
@@ -171,9 +228,13 @@ export async function updateServiceTicket(
   },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { customerName, customerPhone, promisedAt, assignedToId, ...rest } =
       data;
+    const before = await prisma.serviceTicket.findUnique({
+      where: { id: ticketId },
+      select: { assignedToId: true, code: true, customer: { select: { name: true } }, deviceBrand: true, deviceModel: true, deviceType: true },
+    });
     await prisma.serviceTicket.update({
       where: { id: ticketId },
       data: {
@@ -192,6 +253,24 @@ export async function updateServiceTicket(
               : null,
       },
     });
+    if (
+      assignedToId !== undefined &&
+      assignedToId &&
+      assignedToId !== before?.assignedToId &&
+      assignedToId !== session.id &&
+      before
+    ) {
+      const deviceLabel =
+        [before.deviceBrand, before.deviceModel].filter(Boolean).join(" ") ||
+        before.deviceType;
+      await createNotification({
+        userId: assignedToId,
+        type: "ticket_assigned",
+        title: `Bạn được giao phiếu ${before.code}`,
+        body: `${before.customer.name} · ${deviceLabel}`,
+        link: `/pos?ticket=${ticketId}&code=${before.code}`,
+      });
+    }
     if (customerName !== undefined || customerPhone !== undefined) {
       const ticket = await prisma.serviceTicket.findUnique({
         where: { id: ticketId },

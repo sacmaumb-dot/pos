@@ -18,6 +18,8 @@ import {
   Headphones,
 } from "lucide-react";
 import { formatVND } from "@/lib/format";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { ProductFilter } from "./product-filter";
 import { ProductDialog } from "./product-dialog";
 import { ProductActions } from "./product-actions";
@@ -88,7 +90,13 @@ export default async function ProductsPage({
             Quản lý sản phẩm, dịch vụ và tồn kho.
           </p>
         </div>
-        <ProductDialog categories={categories} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" render={<Link href="/stock" />}>
+            <Boxes className="size-4" />
+            Nhập / Xuất / Kiểm kê
+          </Button>
+          <ProductDialog categories={categories} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
