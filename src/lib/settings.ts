@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { headers } from "next/headers";
+import type { Tenant } from "@/generated/prisma";
 
 export type AppSettings = {
   shopName: string;
@@ -31,27 +32,24 @@ export const DEFAULT_SETTINGS: AppSettings = {
   bankAccountName: null,
 };
 
-export async function getTenantFromHeader(): Promise<any | null> {
+export async function getTenantFromHeader(): Promise<Tenant | null> {
   const headersList = await headers();
   const slug = headersList.get("x-tenant-slug");
   if (!slug) return null;
-  
-  const tenants = await prisma.$queryRawUnsafe<any[]>(
-    "SELECT * FROM Tenant WHERE slug = ?",
-    slug
-  );
-  return tenants && tenants[0] ? tenants[0] : null;
+
+  // Runs before session is established (subdomain → tenant lookup), so we
+  // must use the raw prisma client. Replace the previous $queryRawUnsafe
+  // with a typed Prisma call.
+  return prisma.tenant.findUnique({ where: { slug } });
 }
 
 export async function getSettings(): Promise<AppSettings> {
   const tenant = await getTenantFromHeader();
   if (!tenant) return DEFAULT_SETTINGS;
 
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    "SELECT * FROM AppSetting WHERE tenantId = ?",
-    tenant.id
-  );
-  const s = rows && rows[0];
+  const s = await prisma.appSetting.findFirst({
+    where: { tenantId: tenant.id },
+  });
   if (!s) return DEFAULT_SETTINGS;
   return {
     shopName: s.shopName,
