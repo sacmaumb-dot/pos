@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { updateTemplate } from "./actions";
 import { renderTemplate } from "@/lib/template-engine";
+import { sanitizeTemplateHtml } from "@/lib/sanitize-html";
 
 // Import Jodit dynamically
 const JoditEditor = dynamic(() => import("jodit-react"), {
@@ -117,7 +118,7 @@ export function TemplateEditor({ templates }: { templates: Template[] }) {
     });
   }
 
-  const renderedContent = renderTemplate(content, MOCK_DATA);
+  const renderedContent = sanitizeTemplateHtml(renderTemplate(content, MOCK_DATA));
 
   const config = useMemo(() => ({
     readonly: false,

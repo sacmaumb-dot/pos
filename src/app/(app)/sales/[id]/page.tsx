@@ -9,6 +9,7 @@ import {
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
 import { renderTemplate } from "@/lib/template-engine";
+import { sanitizeTemplateHtml } from "@/lib/sanitize-html";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
@@ -98,7 +99,9 @@ export default async function SaleDetailPage({
 </div>
   `.trim();
 
-  const renderedContent = renderTemplate(template?.content, templateData, itemsTableHtml);
+  const renderedContent = sanitizeTemplateHtml(
+    renderTemplate(template?.content, templateData, itemsTableHtml),
+  );
 
   return (
     <PrintReceiptShell
