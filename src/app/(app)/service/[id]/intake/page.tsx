@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { formatVND, formatDateTime } from "@/lib/format";
@@ -8,6 +9,7 @@ import {
   ReceiptSection,
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
+import { renderTemplate } from "@/lib/template-engine";
 
 const DEVICE_LABELS: Record<string, string> = {
   phone: "Điện thoại",
@@ -25,9 +27,11 @@ export default async function ServiceIntakePrintPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const user = await getSession();
+  if (!user) notFound();
   const settings = await getSettings();
   const size = sp.size || settings.printSize || "A4";
-  const ticket = await prisma.serviceTicket.findUnique({
+  const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
     where: { id },
     include: {
       customer: true,
@@ -36,6 +40,64 @@ export default async function ServiceIntakePrintPage({
     },
   });
   if (!ticket) notFound();
+
+  const template = await (await getTenantPrismaServer()).printTemplate.findUnique({
+    where: {
+      tenantId_slug: {
+        tenantId: user.tenantId,
+        slug: "service-intake",
+      },
+    },
+  });
+
+  const templateData = {
+    ten_cua_hang: settings.shopName,
+    dia_chi_cua_hang: settings.shopAddress || "",
+    sdt_cua_hang: settings.shopPhone || "",
+    ma_phieu: ticket.code,
+    ngay_tao: formatDateTime(ticket.receivedAt),
+    ten_khach: ticket.customer.name,
+    sdt_khach: ticket.customer.phone,
+    dia_chi_khach: ticket.customer.address,
+    loai_may: DEVICE_LABELS[ticket.deviceType] || ticket.deviceType,
+    ten_may: [ticket.deviceBrand, ticket.deviceModel].filter(Boolean).join(" "),
+    imei: ticket.imei,
+    tinh_trang: ticket.appearance,
+    loi_yeu_cau: ticket.problem,
+    hen_tra: ticket.promisedAt ? formatDateTime(ticket.promisedAt) : "",
+    tam_tinh: ticket.estimatedCost,
+    da_thanh_toan: ticket.deposit,
+    ten_nhan_vien: ticket.createdBy.name,
+    ghi_chu: ticket.note || "",
+    bank_id: settings.bankId,
+    bank_account: settings.bankAccount,
+    payment_method: ticket.paymentMethod || "",
+    items: ticket.items.map(it => ({
+      ten: it.description,
+      sl: it.quantity,
+      gia: it.unitPrice,
+      thanh_tien: it.subtotal,
+    }))
+  };
+
+  const itemsTableHtml = `
+<div style="margin: 15px 0;">
+  <div style="display: flex; font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0;">
+    <div style="flex: 1;">Nội dung</div>
+    <div style="width: 40px; text-align: right;">SL</div>
+    <div style="width: 100px; text-align: right;">Thành tiền</div>
+  </div>
+  ${ticket.items.map(it => `
+    <div style="display: flex; font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f9f9f9;">
+      <div style="flex: 1;">${it.description}</div>
+      <div style="width: 40px; text-align: right;">${it.quantity}</div>
+      <div style="width: 100px; text-align: right; font-weight: 500;">${formatVND(it.subtotal)}</div>
+    </div>
+  `).join('')}
+</div>
+  `.trim();
+
+  const renderedContent = renderTemplate(template?.content, templateData, itemsTableHtml);
 
   return (
     <Suspense fallback={null}>
@@ -46,145 +108,11 @@ export default async function ServiceIntakePrintPage({
         size={size}
         settings={settings}
       >
-        <ReceiptHeader
-          title="PHIẾU NHẬN MÁY"
-          code={ticket.code}
-          subtitle={`Tiếp nhận: ${formatDateTime(ticket.receivedAt)}`}
-          settings={settings}
-        />
-
-        <div className="receipt-padding p-5 space-y-4 text-sm">
-          <ReceiptSection title="Khách hàng">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-xs text-muted-foreground">Họ tên</div>
-                <div className="font-medium">{ticket.customer.name}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">SĐT</div>
-                <div className="font-medium">{ticket.customer.phone}</div>
-              </div>
-            </div>
-          </ReceiptSection>
-
-          <ReceiptSection title="Thiết bị">
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Loại" value={DEVICE_LABELS[ticket.deviceType] || ticket.deviceType} />
-              <Field label="Hãng" value={ticket.deviceBrand} />
-              <Field label="Model" value={ticket.deviceModel} />
-              <Field label="IMEI / Serial" value={ticket.imei} mono />
-              <Field
-                label="Phụ kiện kèm theo"
-                value={ticket.accessories}
-                wide
-              />
-              <Field label="Tình trạng máy" value={ticket.appearance} wide />
-            </div>
-          </ReceiptSection>
-
-          <ReceiptSection title="Yêu cầu sửa chữa">
-            <p className="whitespace-pre-wrap">{ticket.problem}</p>
-          </ReceiptSection>
-
-          {ticket.items.length > 0 && (
-            <ReceiptSection title="Báo giá dịch vụ">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-left font-medium py-1.5">Nội dung</th>
-                    <th className="text-right font-medium py-1.5 w-12">SL</th>
-                    <th className="text-right font-medium py-1.5 w-28">
-                      Đơn giá
-                    </th>
-                    <th className="text-right font-medium py-1.5 w-28">
-                      Thành tiền
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ticket.items.map((it) => (
-                    <tr key={it.id} className="border-b last:border-0">
-                      <td className="py-2">{it.description}</td>
-                      <td className="text-right">{it.quantity}</td>
-                      <td className="text-right">{formatVND(it.unitPrice)}</td>
-                      <td className="text-right font-medium">
-                        {formatVND(it.subtotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} className="text-right pt-2 font-semibold">
-                      Tổng báo giá
-                    </td>
-                    <td className="text-right pt-2 font-bold text-base text-primary">
-                      {formatVND(ticket.estimatedCost)}
-                    </td>
-                  </tr>
-                  {ticket.deposit > 0 && (
-                    <tr>
-                      <td
-                        colSpan={3}
-                        className="text-right text-muted-foreground"
-                      >
-                        Đặt cọc
-                      </td>
-                      <td className="text-right text-emerald-600">
-                        {formatVND(ticket.deposit)}
-                      </td>
-                    </tr>
-                  )}
-                </tfoot>
-              </table>
-            </ReceiptSection>
-          )}
-
-          {ticket.promisedAt && (
-            <div className="rounded-md border border-dashed p-3 text-sm">
-              <span className="text-muted-foreground">Hẹn trả máy: </span>
-              <span className="font-medium">
-                {formatDateTime(ticket.promisedAt)}
-              </span>
-            </div>
-          )}
-
-          <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-            <div>
-              • Cửa hàng chỉ giữ máy theo nội dung mô tả ở phiếu này. Khách
-              hàng vui lòng giữ phiếu để nhận lại máy.
-            </div>
-            <div>
-              • Báo giá có thể thay đổi sau khi kiểm tra chi tiết, cửa hàng sẽ
-              thông báo trước khi tiến hành sửa.
-            </div>
-            <div>
-              • Mọi phát sinh hư hỏng do người dùng tự ý mở máy/sửa chữa nơi
-              khác trước đó, cửa hàng không chịu trách nhiệm.
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 pt-4">
-            <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-12">
-                Khách hàng
-              </div>
-              <div className="border-t pt-1 text-xs text-muted-foreground">
-                Ký, ghi rõ họ tên
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-1">
-                Nhân viên tiếp nhận
-              </div>
-              <div className="text-sm font-medium mb-9">
-                {ticket.createdBy.name}
-              </div>
-              <div className="border-t pt-1 text-xs text-muted-foreground">
-                Ký xác nhận
-              </div>
-            </div>
-          </div>
+        <div className="receipt-padding p-8">
+          <div 
+            className="prose prose-sm max-w-none text-black"
+            dangerouslySetInnerHTML={{ __html: renderedContent }} 
+          />
         </div>
       </PrintReceiptShell>
     </Suspense>

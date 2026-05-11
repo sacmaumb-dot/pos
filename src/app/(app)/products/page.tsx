@@ -1,10 +1,11 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,20 +17,34 @@ import {
   Boxes,
   TrendingUp,
   Headphones,
+  Search,
+  Plus,
+  ArrowRightLeft,
+  Calendar,
+  Layers,
+  ChevronRight
 } from "lucide-react";
 import { formatVND } from "@/lib/format";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ProductFilter } from "./product-filter";
 import { ProductDialog } from "./product-dialog";
 import { ProductActions } from "./product-actions";
+import { CategoryDialog } from "../categories/category-dialog";
+import { CategoryActions } from "../categories/category-actions";
+import { cn } from "@/lib/utils";
+import { Hash } from "lucide-react";
 
-const CAT_ICONS: Record<string, React.ReactNode> = {
-  phone: <Smartphone className="size-4" />,
-  laptop: <LaptopIcon className="size-4" />,
-  service: <Wrench className="size-4" />,
-  accessory: <Headphones className="size-4" />,
-};
+import * as Icons from "lucide-react";
+
+function DynamicIcon({ name, className }: { name: string; className?: string }) {
+  const pascalName = name
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  const IconComponent = (Icons as any)[pascalName] || Icons.Package;
+  return <IconComponent className={className} />;
+}
 
 export default async function ProductsPage({
   searchParams,
@@ -51,22 +66,25 @@ export default async function ProductsPage({
 
   const [products, categories, totalProducts, lowStockCount, allActive] =
     await Promise.all([
-      prisma.product.findMany({
+      (await getTenantPrismaServer()).product.findMany({
         where,
         orderBy: { name: "asc" },
         include: { category: true },
         take: 200,
       }),
-      prisma.category.findMany({ orderBy: { name: "asc" } }),
-      prisma.product.count({ where: { isActive: true } }),
-      prisma.product.count({
+      (await getTenantPrismaServer()).category.findMany({
+        orderBy: { name: "asc" },
+        include: { _count: { select: { products: true } } },
+      }),
+      (await getTenantPrismaServer()).product.count({ where: { isActive: true } }),
+      (await getTenantPrismaServer()).product.count({
         where: {
           isActive: true,
           stock: { lte: 5 },
           category: { type: { not: "service" } },
         },
       }),
-      prisma.product.findMany({
+      (await getTenantPrismaServer()).product.findMany({
         where: { isActive: true },
         select: { stock: true, costPrice: true, category: true },
       }),
@@ -82,151 +100,121 @@ export default async function ProductsPage({
   ).length;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6 pb-12">
+      {/* Header section matched with Customers style */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent p-6 rounded-2xl border border-border/50">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Kho hàng</h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý sản phẩm, dịch vụ và tồn kho.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Package className="size-6 text-primary" />
+            Kho hàng & Sản phẩm
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Quản lý tồn kho linh kiện, phụ kiện và danh mục dịch vụ sửa chữa.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" render={<Link href="/stock" />}>
-            <Boxes className="size-4" />
-            Nhập / Xuất / Kiểm kê
-          </Button>
+        <div className="flex items-center gap-3">
+          <Link href="/stock" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-xl px-5 h-10 font-bold bg-white/50 backdrop-blur-sm")}>
+            <ArrowRightLeft className="size-4 mr-2" />
+            Nhập / Xuất kho
+          </Link>
           <ProductDialog categories={categories} />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
-          icon={<Boxes className="size-4" />}
-          label="Tổng sản phẩm"
+      {/* KPI Stats matched with Customers style */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi
+          icon={<Layers className="size-5" />}
+          label="Tổng mặt hàng"
           value={String(totalProducts)}
-          tone="default"
+          subValue="Đang kinh doanh"
+          gradient="from-blue-500 to-indigo-600"
         />
-        <KpiCard
-          icon={<TrendingUp className="size-4" />}
-          label="Giá trị kho (giá nhập)"
+        <Kpi
+          icon={<TrendingUp className="size-5" />}
+          label="Giá trị tồn kho"
           value={formatVND(inventoryValue)}
-          tone="primary"
+          subValue="Tổng vốn lưu động"
+          gradient="from-emerald-400 to-teal-600"
         />
-        <KpiCard
-          icon={<AlertTriangle className="size-4" />}
-          label="Sắp hết / Hết hàng"
+        <Kpi
+          icon={<AlertTriangle className="size-5" />}
+          label="Cảnh báo hết"
           value={String(lowStockCount)}
-          tone={lowStockCount > 0 ? "destructive" : "default"}
+          subValue="Sắp hết hàng"
+          gradient={lowStockCount > 0 ? "from-rose-400 to-red-600" : "from-amber-400 to-orange-600"}
         />
-        <KpiCard
-          icon={<Wrench className="size-4" />}
+        <Kpi
+          icon={<Wrench className="size-5" />}
           label="Dịch vụ"
           value={String(serviceCount)}
-          tone="default"
+          subValue="Loại hình cài đặt"
+          gradient="from-violet-500 to-fuchsia-600"
         />
       </div>
 
-      <Card>
-        <CardHeader className="border-b pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Package className="size-4" />
-            Danh sách ({products.length})
+      {/* List Section matched with Customers style */}
+      <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
+        <CardHeader className="border-b border-border/60 pb-4 px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Package className="size-4 text-primary" />
+            Loại hình sản phẩm ({products.length})
           </CardTitle>
-          <ProductFilter categories={categories} />
+          <div className="w-full md:w-80">
+            <ProductFilter categories={categories} />
+          </div>
         </CardHeader>
-        <CardContent className="p-3">
+        <CardContent className="p-6">
           {products.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              Không tìm thấy sản phẩm phù hợp.
+            <div className="py-20 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+               <Search className="size-10 text-muted-foreground/40 animate-pulse" />
+               <span>Chưa tìm thấy sản phẩm nào phù hợp.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
-              {products.map((p) => {
-                const isService = p.category.type === "service";
-                const lowStock = !isService && p.stock <= 5;
-                const outOfStock = !isService && p.stock <= 0;
-                return (
-                  <div
-                    key={p.id}
-                    className="rounded-md border bg-card hover:border-primary/60 hover:shadow-sm transition-all flex items-center gap-2.5 p-2.5"
-                  >
-                    <div className="size-10 shrink-0 rounded bg-muted/60 flex items-center justify-center text-muted-foreground">
-                      {CAT_ICONS[p.category.type] || (
-                        <Package className="size-4" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {p.sku}
-                        </span>
-                        {isService ? (
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] h-4 px-1"
-                          >
-                            DV
-                          </Badge>
-                        ) : outOfStock ? (
-                          <Badge
-                            variant="destructive"
-                            className="text-[9px] h-4 px-1"
-                          >
-                            Hết
-                          </Badge>
-                        ) : lowStock ? (
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] h-4 px-1 border-amber-500 text-amber-700 dark:text-amber-400"
-                          >
-                            Còn {p.stock}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="text-[9px] h-4 px-1"
-                          >
-                            {p.stock}
-                          </Badge>
-                        )}
-                        {p.warranty > 0 && (
-                          <span className="text-[9px] text-muted-foreground">
-                            BH {p.warranty}t
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-medium leading-snug line-clamp-1">
-                        {p.name}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-bold text-primary">
-                          {formatVND(p.price)}
-                        </span>
-                        {!isService && p.costPrice > 0 && (
-                          <span className="text-[10px] text-muted-foreground">
-                            nhập {formatVND(p.costPrice)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <ProductActions
-                      product={{
-                        id: p.id,
-                        sku: p.sku,
-                        name: p.name,
-                        brand: p.brand,
-                        categoryId: p.categoryId,
-                        price: p.price,
-                        costPrice: p.costPrice,
-                        stock: p.stock,
-                        warranty: p.warranty,
-                        description: p.description,
-                      }}
-                      categories={categories}
-                    />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {products.map((p) => (
+                <ProductCard key={p.id} product={p} categories={categories} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Category Management Section */}
+      <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
+        <CardHeader className="border-b border-border/60 pb-4 px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Layers className="size-4 text-primary" />
+            Quản lý loại hình ({categories.length})
+          </CardTitle>
+          <CategoryDialog />
+        </CardHeader>
+        <CardContent className="p-4">
+          {categories.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Chưa có danh mục nào.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {categories.map((cat: any) => (
+                <div
+                  key={cat.id}
+                  className="group flex items-center gap-3 p-3 rounded-xl border border-border/60 hover:border-primary/30 hover:bg-primary/[0.02] transition-all"
+                >
+                  <div className="size-10 shrink-0 rounded-lg bg-primary/8 flex items-center justify-center text-primary">
+                    <DynamicIcon name={cat.icon || "package"} className="size-5" />
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-foreground truncate">{cat.name}</div>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span className="font-mono font-bold">{cat.skuPrefix || "—"}</span>
+                      <span>•</span>
+                      <span>{cat._count?.products ?? 0} sản phẩm</span>
+                    </div>
+                  </div>
+                  <CategoryActions category={cat} />
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -235,34 +223,87 @@ export default async function ProductsPage({
   );
 }
 
-function KpiCard({
+function ProductCard({ product, categories }: { product: any, categories: any }) {
+  const isService = product.category.type === "service";
+  const lowStock = !isService && product.stock <= 5;
+  const outOfStock = !isService && product.stock <= 0;
+
+  return (
+    <div className="group relative flex flex-col p-4 rounded-xl border border-border/80 bg-card/80 hover:border-primary/40 hover:shadow-md transition-all duration-300">
+      <div className="flex items-start justify-between mb-4">
+        <div className="size-11 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm">
+          <DynamicIcon name={product.category.icon || "package"} className="size-5" />
+        </div>
+        <ProductActions
+          product={product}
+          categories={categories}
+        />
+      </div>
+
+      <div className="flex-1 space-y-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+             <span className="text-[10px] font-bold text-muted-foreground font-mono uppercase tracking-wider">{product.sku}</span>
+             {isService ? (
+               <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-blue-200 text-blue-600 bg-blue-50/50 rounded-md">DV</Badge>
+             ) : outOfStock ? (
+               <Badge variant="destructive" className="text-[9px] h-4 px-1.5 font-bold uppercase tracking-wider rounded-md">Hết hàng</Badge>
+             ) : lowStock ? (
+               <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-200 text-amber-600 bg-amber-50/50 font-bold rounded-md">Còn {product.stock}</Badge>
+             ) : (
+               <Badge variant="secondary" className="text-[9px] h-4 px-1.5 font-bold bg-emerald-50 text-emerald-600 border-none rounded-md">{product.stock} kho</Badge>
+             )}
+          </div>
+          <h3 className="text-[13px] font-bold text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+            {product.name}
+          </h3>
+          <div className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">{product.brand}</div>
+        </div>
+
+        <div className="pt-3 border-t border-border/50 flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+             <span className="text-[9px] uppercase tracking-widest font-black text-muted-foreground/60">Giá bán</span>
+             <span className="text-sm font-black text-primary">{formatVND(product.price)}</span>
+          </div>
+          {!isService && product.costPrice > 0 && (
+             <div className="flex items-center justify-between text-[9px] text-muted-foreground/60 font-medium italic">
+                <span>Vốn: {formatVND(product.costPrice)}</span>
+                <span>Lãi: {formatVND(product.price - product.costPrice)}</span>
+             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Kpi({
   icon,
   label,
   value,
-  tone,
+  subValue,
+  gradient,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone: "default" | "primary" | "destructive";
+  subValue: string;
+  gradient: string;
 }) {
-  const toneCls =
-    tone === "primary"
-      ? "bg-primary/10 text-primary"
-      : tone === "destructive"
-        ? "bg-destructive/10 text-destructive"
-        : "bg-muted text-muted-foreground";
   return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`size-10 rounded-md flex items-center justify-center ${toneCls}`}>
+    <Card className="border border-border/80 shadow-md rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm group hover:border-primary/30 hover:shadow-lg transition-all duration-300">
+      <CardContent className="p-5 flex items-center gap-4">
+        <div
+          className={`size-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-tr ${gradient} shadow-lg shadow-primary/5 group-hover:scale-105 transition-transform duration-300`}
+        >
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+          <div className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
             {label}
           </div>
-          <div className="text-base font-bold truncate">{value}</div>
+          <div className="text-lg font-black text-foreground mt-0.5 truncate">{value}</div>
+          <div className="text-[10px] text-muted-foreground font-medium">{subValue}</div>
         </div>
       </CardContent>
     </Card>

@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { formatVND, formatDateTime } from "@/lib/format";
 import {
@@ -7,6 +8,7 @@ import {
   ReceiptSection,
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
+import { renderTemplate } from "@/lib/template-engine";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
@@ -24,10 +26,12 @@ export default async function SaleDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const user = await getSession();
+  if (!user) notFound();
   const settings = await getSettings();
   const size = sp.size || settings.printSize || "A4";
 
-  const sale = await prisma.sale.findUnique({
+  const sale = await (await getTenantPrismaServer()).sale.findUnique({
     where: { id },
     include: {
       customer: true,
@@ -37,6 +41,65 @@ export default async function SaleDetailPage({
   });
   if (!sale) notFound();
 
+  const template = await (await getTenantPrismaServer()).printTemplate.findUnique({
+    where: {
+      tenantId_slug: {
+        tenantId: user.tenantId,
+        slug: "sale-receipt",
+      },
+    },
+  });
+
+  const templateData = {
+    ten_cua_hang: settings.shopName,
+    dia_chi_cua_hang: settings.shopAddress || "",
+    sdt_cua_hang: settings.shopPhone || "",
+    ma_phieu: sale.code,
+    ngay_tao: formatDateTime(sale.createdAt),
+    ten_khach: sale.customer?.name,
+    sdt_khach: sale.customer?.phone,
+    dia_chi_khach: sale.customer?.address,
+    tam_tinh: sale.subtotal,
+    chiet_khau: sale.discount,
+    tong_cong: sale.total,
+    da_thanh_toan: sale.paid,
+    con_no: Math.max(0, sale.total - sale.paid),
+    ten_nhan_vien: sale.user.name,
+    ghi_chu: sale.note || "",
+    bank_id: settings.bankId,
+    bank_account: settings.bankAccount,
+    payment_method: sale.paymentMethod,
+    items: sale.items.map(item => ({
+      ten: item.product.name,
+      sl: item.quantity,
+      gia: item.unitPrice,
+      thanh_tien: item.subtotal,
+      imei: item.imei || undefined
+    }))
+  };
+
+  const itemsTableHtml = `
+<div style="margin: 15px 0;">
+  <div style="display: flex; font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0;">
+    <div style="flex: 1;">Nội dung</div>
+    <div style="width: 40px; text-align: right;">SL</div>
+    <div style="width: 100px; text-align: right;">Thành tiền</div>
+  </div>
+  ${sale.items.map(item => `
+    <div style="display: flex; font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f9f9f9;">
+      <div style="flex: 1;">
+        <div style="font-weight: 500;">${item.product.name}</div>
+        ${item.imei ? `<div style="font-size: 10px; color: #888;">IMEI: ${item.imei}</div>` : ''}
+      </div>
+      <div style="width: 40px; text-align: right;">${item.quantity}</div>
+      <div style="width: 100px; text-align: right; font-weight: 500;">${formatVND(item.subtotal)}</div>
+    </div>
+  `).join('')}
+</div>
+  `.trim();
+
+  const renderedContent = renderTemplate(template?.content, templateData, itemsTableHtml);
+
   return (
     <PrintReceiptShell
       backHref="/sales"
@@ -45,130 +108,11 @@ export default async function SaleDetailPage({
       size={size}
       settings={settings}
     >
-      <ReceiptHeader
-        title="HOÁ ĐƠN BÁN HÀNG"
-        code={sale.code}
-        subtitle={formatDateTime(sale.createdAt)}
-        settings={settings}
-      />
-
-      <div className="receipt-padding p-5 space-y-4 text-sm">
-        <ReceiptSection title="Khách hàng">
-          {sale.customer ? (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-xs text-muted-foreground">Họ tên</div>
-                <div className="font-medium">{sale.customer.name}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">SĐT</div>
-                <div className="font-medium font-mono">
-                  {sale.customer.phone}
-                </div>
-              </div>
-              {sale.customer.address && (
-                <div className="col-span-2">
-                  <div className="text-xs text-muted-foreground">Địa chỉ</div>
-                  <div>{sale.customer.address}</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="font-medium">Khách lẻ</div>
-          )}
-        </ReceiptSection>
-
-        <ReceiptSection title="Chi tiết">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="text-left font-medium py-1.5">Sản phẩm</th>
-                <th className="text-right font-medium py-1.5 w-10">SL</th>
-                <th className="text-right font-medium py-1.5 w-24 print-hide-on-thermal">
-                  Đơn giá
-                </th>
-                <th className="text-right font-medium py-1.5 w-28">
-                  Thành tiền
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sale.items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0 align-top">
-                  <td className="py-1.5">
-                    <div className="font-medium">{item.product.name}</div>
-                    {(item.product.sku || item.imei) && (
-                      <div className="text-[10px] text-muted-foreground font-mono">
-                        {item.product.sku}
-                        {item.imei && ` · IMEI: ${item.imei}`}
-                      </div>
-                    )}
-                  </td>
-                  <td className="text-right py-1.5">{item.quantity}</td>
-                  <td className="text-right py-1.5 print-hide-on-thermal">
-                    {formatVND(item.unitPrice)}
-                  </td>
-                  <td className="text-right py-1.5 font-medium">
-                    {formatVND(item.subtotal)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ReceiptSection>
-
-        <div className="rounded-md border p-3 space-y-1.5">
-          <Row label="Tạm tính" value={formatVND(sale.subtotal)} />
-          {sale.discount > 0 && (
-            <Row
-              label="Giảm giá"
-              value={`-${formatVND(sale.discount)}`}
-              color="text-emerald-600"
-            />
-          )}
-          <Row
-            label="Phương thức"
-            value={PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod}
-          />
-          <div className="border-t pt-1.5">
-            <Row
-              label="Tổng cộng"
-              value={formatVND(sale.total)}
-              bold
-              color="text-primary"
-            />
-          </div>
-        </div>
-
-        {sale.note && (
-          <div className="text-xs text-muted-foreground">
-            <span className="font-semibold">Ghi chú:</span> {sale.note}
-          </div>
-        )}
-
-        <div className="text-center text-xs text-muted-foreground italic pt-2 border-t">
-          Cảm ơn quý khách! Hẹn gặp lại.
-        </div>
-
-        <div className="grid grid-cols-2 gap-8 pt-3 print-hide-on-thermal">
-          <div className="text-center">
-            <div className="text-[11px] text-muted-foreground mb-10">
-              Khách hàng
-            </div>
-            <div className="border-t pt-1 text-[10px] text-muted-foreground">
-              Ký, ghi rõ họ tên
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-[11px] text-muted-foreground mb-1">
-              Nhân viên
-            </div>
-            <div className="text-sm font-medium mb-7">{sale.user.name}</div>
-            <div className="border-t pt-1 text-[10px] text-muted-foreground">
-              Ký xác nhận
-            </div>
-          </div>
-        </div>
+      <div className="receipt-padding p-8">
+        <div 
+          className="prose prose-sm max-w-none text-black"
+          dangerouslySetInnerHTML={{ __html: renderedContent }} 
+        />
       </div>
     </PrintReceiptShell>
   );

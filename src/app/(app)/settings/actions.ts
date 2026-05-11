@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath, updateTag } from "next/cache";
 import { writeFile, mkdir } from "fs/promises";
@@ -22,33 +22,49 @@ export async function updateSettings(data: {
   shopPhone: string;
   shopEmail: string;
   printSize: string;
+  bankId: string;
+  bankAccount: string;
+  bankAccountName: string;
 }) {
   try {
     if (!(await requireAdmin())) {
       return { ok: false as const, error: "Không có quyền" };
     }
-    await prisma.appSetting.upsert({
-      where: { id: SETTING_ID },
-      update: {
-        shopName: data.shopName,
-        siteTitle: data.siteTitle,
-        shopTagline: data.shopTagline,
-        shopAddress: data.shopAddress || null,
-        shopPhone: data.shopPhone || null,
-        shopEmail: data.shopEmail || null,
-        printSize: data.printSize,
-      },
-      create: {
-        id: SETTING_ID,
-        shopName: data.shopName,
-        siteTitle: data.siteTitle,
-        shopTagline: data.shopTagline,
-        shopAddress: data.shopAddress || null,
-        shopPhone: data.shopPhone || null,
-        shopEmail: data.shopEmail || null,
-        printSize: data.printSize,
-      },
-    });
+    const existing = await (await getTenantPrismaServer()).$queryRawUnsafe<any[]>(
+      "SELECT id FROM AppSetting WHERE id = 'singleton'"
+    );
+    if (existing && existing.length > 0) {
+      await (await getTenantPrismaServer()).$executeRawUnsafe(
+        `UPDATE AppSetting 
+         SET shopName = ?, siteTitle = ?, shopTagline = ?, shopAddress = ?, shopPhone = ?, shopEmail = ?, printSize = ?, bankId = ?, bankAccount = ?, bankAccountName = ?
+         WHERE id = 'singleton'`,
+        data.shopName,
+        data.siteTitle,
+        data.shopTagline,
+        data.shopAddress || null,
+        data.shopPhone || null,
+        data.shopEmail || null,
+        data.printSize,
+        data.bankId || null,
+        data.bankAccount || null,
+        data.bankAccountName || null
+      );
+    } else {
+      await (await getTenantPrismaServer()).$executeRawUnsafe(
+        `INSERT INTO AppSetting (id, shopName, siteTitle, shopTagline, shopAddress, shopPhone, shopEmail, printSize, bankId, bankAccount, bankAccountName, updatedAt)
+         VALUES ('singleton', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        data.shopName,
+        data.siteTitle,
+        data.shopTagline,
+        data.shopAddress || null,
+        data.shopPhone || null,
+        data.shopEmail || null,
+        data.printSize,
+        data.bankId || null,
+        data.bankAccount || null,
+        data.bankAccountName || null
+      );
+    }
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const };
@@ -82,14 +98,27 @@ export async function uploadAsset(formData: FormData) {
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buf);
     const url = `/uploads/${fileName}`;
-    await prisma.appSetting.upsert({
-      where: { id: SETTING_ID },
-      update: kind === "favicon" ? { faviconUrl: url } : { logoUrl: url },
-      create: {
-        id: SETTING_ID,
-        ...(kind === "favicon" ? { faviconUrl: url } : { logoUrl: url }),
-      },
-    });
+    const adminS = await getSession();
+    const tenantId = adminS?.tenantId || "singleton";
+
+    const existing = await (await getTenantPrismaServer()).$queryRawUnsafe<any[]>(
+      "SELECT id FROM AppSetting WHERE tenantId = ?",
+      tenantId
+    );
+    if (existing && existing.length > 0) {
+      await (await getTenantPrismaServer()).$executeRawUnsafe(
+        `UPDATE AppSetting SET ${kind === "favicon" ? "faviconUrl" : "logoUrl"} = ? WHERE tenantId = ?`,
+        url,
+        tenantId
+      );
+    } else {
+      await (await getTenantPrismaServer()).$executeRawUnsafe(
+        `INSERT INTO AppSetting (id, ${kind === "favicon" ? "faviconUrl" : "logoUrl"}, tenantId, updatedAt) VALUES (?, ?, ?, datetime('now'))`,
+        Math.random().toString(),
+        url,
+        tenantId
+      );
+    }
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const, url };
@@ -104,14 +133,13 @@ export async function clearAsset(kind: "logo" | "favicon") {
     if (!(await requireAdmin())) {
       return { ok: false as const, error: "Không có quyền" };
     }
-    await prisma.appSetting.upsert({
-      where: { id: SETTING_ID },
-      update: kind === "favicon" ? { faviconUrl: null } : { logoUrl: null },
-      create: {
-        id: SETTING_ID,
-        ...(kind === "favicon" ? { faviconUrl: null } : { logoUrl: null }),
-      },
-    });
+    const adminS = await getSession();
+    const tenantId = adminS?.tenantId || "singleton";
+
+    await (await getTenantPrismaServer()).$executeRawUnsafe(
+      `UPDATE AppSetting SET ${kind === "favicon" ? "faviconUrl" : "logoUrl"} = NULL WHERE tenantId = ?`,
+      tenantId
+    );
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const };

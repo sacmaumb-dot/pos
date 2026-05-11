@@ -39,7 +39,7 @@ import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth";
 
 const navMain = [
-  { title: "Tổng quan", url: "/", icon: LayoutDashboard },
+  { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
   { title: "Bán hàng & Sửa chữa", url: "/pos", icon: ShoppingCart },
 ];
 

@@ -82,8 +82,12 @@ export function ProductDialog({
   }
 
   function submit() {
-    if (!form.sku || !form.name || !form.categoryId) {
-      toast.error("Vui lòng nhập SKU, tên và danh mục");
+    if (!form.name || !form.categoryId) {
+      toast.error("Vui lòng nhập tên và danh mục");
+      return;
+    }
+    if (isEdit && !form.sku) {
+      toast.error("SKU không được để trống");
       return;
     }
     startTransition(async () => {
@@ -131,21 +135,29 @@ export function ProductDialog({
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>SKU *</Label>
-              <Input
-                value={form.sku}
-                onChange={(e) => set("sku", e.target.value)}
-                placeholder="LP006"
-                required
-              />
+              <Label>SKU {isEdit ? "*" : "(tự động)"}</Label>
+              {isEdit ? (
+                <Input
+                  value={form.sku}
+                  onChange={(e) => set("sku", e.target.value)}
+                  placeholder="LP006"
+                  required
+                  readOnly
+                  className="bg-muted/50 cursor-not-allowed font-mono"
+                />
+              ) : (
+                <div className="h-9 px-3 flex items-center rounded-md border border-dashed border-border bg-muted/30 text-xs text-muted-foreground font-mono">
+                  Sẽ tự động tạo theo loại hình
+                </div>
+              )}
             </div>
             <div className="space-y-2">
-              <Label>Danh mục *</Label>
+              <Label>Loại hình *</Label>
               <SelectField
                 value={form.categoryId}
                 onValueChange={(v) => set("categoryId", v)}
-                placeholder="Chọn danh mục"
-                options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                placeholder="Chọn loại hình"
+                options={categories.map((c) => ({ value: c.id, label: `${c.name} (${(c as any).skuPrefix || c.type})` }))}
                 className="w-full"
               />
             </div>

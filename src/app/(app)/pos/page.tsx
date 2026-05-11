@@ -1,19 +1,19 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { WorkspaceClient } from "./workspace-client";
 
 export default async function PosPage() {
   const [products, categories, customers, technicians] = await Promise.all([
-    prisma.product.findMany({
+    (await getTenantPrismaServer()).product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       include: { category: true },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
-    prisma.customer.findMany({
+    (await getTenantPrismaServer()).category.findMany({ orderBy: { name: "asc" } }),
+    (await getTenantPrismaServer()).customer.findMany({
       orderBy: { name: "asc" },
       take: 200,
     }),
-    prisma.user.findMany({
+    (await getTenantPrismaServer()).user.findMany({
       where: { role: { in: ["technician", "admin"] }, active: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -31,9 +31,15 @@ export default async function PosPage() {
           price: p.price,
           stock: p.stock,
           categoryType: p.category.type,
+          categoryIcon: p.category.icon,
           categoryId: p.categoryId,
         }))}
-        categories={categories}
+        categories={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          icon: c.icon,
+        }))}
         customers={customers.map((c) => ({
           id: c.id,
           name: c.name,

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import * as Icons from "lucide-react";
 import {
   Search,
   Plus,
@@ -29,11 +30,10 @@ import {
   Trash2,
   Receipt,
   Loader2,
+  ChevronDown,
   Smartphone,
-  Laptop,
-  Wrench,
-  Package as PackageIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { formatVND } from "@/lib/format";
 import { printInBackground } from "@/lib/print";
 import { toast } from "sonner";
@@ -51,10 +51,11 @@ type Product = {
   price: number;
   stock: number;
   categoryType: string;
+  categoryIcon: string;
   categoryId: string;
 };
 
-type Category = { id: string; name: string; type: string };
+type Category = { id: string; name: string; type: string; icon: string };
 type Customer = { id: string; name: string; phone: string; code: string };
 
 type CartItem = {
@@ -66,12 +67,14 @@ type CartItem = {
   imei?: string;
 };
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  laptop: <Laptop className="size-4" />,
-  phone: <Smartphone className="size-4" />,
-  accessory: <PackageIcon className="size-4" />,
-  service: <Wrench className="size-4" />,
-};
+function DynamicIcon({ name, className }: { name: string; className?: string }) {
+  const pascalName = name
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  const IconComponent = (Icons as any)[pascalName] || Icons.Package;
+  return <IconComponent className={className} />;
+}
 
 const PAYMENT_OPTIONS = [
   { value: "cash", label: "Tiền mặt" },
@@ -106,7 +109,7 @@ export function PosClient({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
-      if (activeCat !== "all" && p.categoryType !== activeCat) return false;
+      if (activeCat !== "all" && p.categoryId !== activeCat) return false;
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) ||
@@ -230,90 +233,114 @@ export function PosClient({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 lg:h-[calc(100vh-160px)]">
-      <div className="flex flex-col gap-3 min-w-0 min-h-0">
-        {showHeader && (
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Bán hàng</h1>
-            <p className="text-xs text-muted-foreground">
-              Chọn sản phẩm để thêm vào giỏ hàng.
-            </p>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 lg:h-[calc(100vh-140px)]">
+      {/* Left Column: Product Selection */}
+      <div className="flex flex-col gap-4 min-w-0 min-h-0">
+        {/* Search & Categories Bar */}
+        <div className="bg-card/65 backdrop-blur-sm border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col gap-4">
+          <div className="relative group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Tìm theo tên, mã SKU, thương hiệu..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-10 h-11 bg-background/50 border-border/60 rounded-xl focus-visible:ring-primary/20"
             />
           </div>
 
-          <Tabs value={activeCat} onValueChange={setActiveCat}>
-            <TabsList className="overflow-x-auto overflow-y-hidden justify-start w-full flex-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <TabsTrigger value="all">Tất cả</TabsTrigger>
-              {categories.map((c) => (
-                <TabsTrigger key={c.id} value={c.type}>
-                  <span className="flex items-center gap-1.5">
-                    {CATEGORY_ICONS[c.type]}
-                    {c.name}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+             <button
+                onClick={() => setActiveCat("all")}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border",
+                  activeCat === "all" 
+                    ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20" 
+                    : "bg-background/50 text-muted-foreground border-border/60 hover:border-primary/40 hover:text-foreground"
+                )}
+             >
+                Tất cả
+             </button>
+             {categories.map((c) => (
+               <button
+                  key={c.id}
+                  onClick={() => setActiveCat(c.id)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border flex items-center gap-2",
+                    activeCat === c.id 
+                      ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20" 
+                      : "bg-background/50 text-muted-foreground border-border/60 hover:border-primary/40 hover:text-foreground"
+                  )}
+               >
+                  <DynamicIcon name={c.icon || "package"} className="size-3.5" />
+                  {c.name}
+               </button>
+             ))}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1 content-start">
+        {/* Product Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pr-1 content-start pb-20 lg:pb-0">
           {filtered.map((p) => (
             <button
               key={p.id}
               onClick={() => addToCart(p)}
               disabled={p.stock <= 0 && p.categoryType !== "service"}
-              className="text-left disabled:opacity-50 disabled:cursor-not-allowed group"
+              className="group relative flex flex-col text-left disabled:opacity-50 disabled:cursor-not-allowed w-full bg-white border border-slate-200 rounded-2xl p-4 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300"
             >
-              <div className="rounded-md border bg-card hover:border-primary/60 hover:shadow-sm transition-all flex items-center gap-2.5 p-2.5">
-                <div className="size-10 shrink-0 rounded bg-muted/60 flex items-center justify-center text-muted-foreground">
-                  {CATEGORY_ICONS[p.categoryType] || (
-                    <PackageIcon className="size-4" />
-                  )}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-10 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                    <DynamicIcon name={p.categoryIcon} className="size-5" />
+                  </div>
+                  <span className="text-[11px] font-bold text-muted-foreground/60 font-mono tracking-tight uppercase">
+                    {p.sku}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      {p.sku}
-                    </span>
-                    {p.categoryType !== "service" && (
-                      <Badge
-                        variant={p.stock <= 0 ? "destructive" : "secondary"}
-                        className="text-[9px] h-4 px-1"
-                      >
-                        {p.stock <= 0 ? "Hết" : `${p.stock}`}
-                      </Badge>
+                {p.categoryType !== "service" && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-sm border",
+                      p.stock <= 0
+                        ? "bg-rose-50 text-rose-500 border-rose-100"
+                        : "bg-emerald-50 text-emerald-600 border-emerald-100"
                     )}
-                  </div>
-                  <div className="text-xs font-medium leading-snug line-clamp-1">
-                    {p.name}
-                  </div>
-                  <div className="text-xs font-bold text-primary mt-0.5">
+                  >
+                    {p.stock <= 0 ? "Hết" : `Kho: ${p.stock}`}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1 flex flex-col justify-between gap-4">
+                <h3 className="text-[14px] font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-primary transition-colors min-h-[2.5rem]">
+                  {p.name}
+                </h3>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[17px] font-black text-primary">
                     {formatVND(p.price)}
+                  </span>
+                  <div className="size-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-110 transition-transform duration-300">
+                    <Plus className="size-5" />
                   </div>
                 </div>
               </div>
             </button>
           ))}
           {filtered.length === 0 && (
-            <div className="col-span-full text-center text-muted-foreground py-12">
-              Không tìm thấy sản phẩm phù hợp.
+            <div className="col-span-full text-center py-24 flex flex-col items-center gap-4 bg-card/40 rounded-3xl border border-dashed border-border/60">
+              <div className="size-16 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground/30">
+                <Search className="size-8" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground/60">
+                Không tìm thấy sản phẩm phù hợp.
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      <div className="hidden lg:block min-h-0">
+      {/* Right Column: Cart Panel */}
+      <div className="hidden lg:block h-full">
         <CartPanel
           cart={cart}
           subtotal={subtotal}
@@ -330,22 +357,55 @@ export function PosClient({
         />
       </div>
 
-      <div className="lg:hidden fixed bottom-4 right-4 z-30">
+      {/* Mobile Cart Floating Bar */}
+      <div className="lg:hidden fixed bottom-6 left-4 right-4 z-40">
         <Sheet open={openCart} onOpenChange={setOpenCart}>
           <SheetTrigger
+            nativeButton={false}
             render={
-              <Button size="lg" className="rounded-full shadow-lg h-14 px-6" />
+              <div
+                role="button"
+                tabIndex={0}
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "w-full rounded-2xl shadow-2xl h-16 px-6 bg-slate-900 hover:bg-slate-800 border-t border-white/10 ring-1 ring-white/10 cursor-pointer"
+                )}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <ShoppingCart className="size-6 text-white" />
+                      {itemCount > 0 && (
+                        <span className="absolute -top-2 -right-2 size-5 bg-primary text-primary-foreground text-[10px] font-black rounded-full flex items-center justify-center border-2 border-slate-900">
+                          {itemCount}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Tổng tiền
+                      </span>
+                      <span className="text-lg font-black text-white">
+                        {formatVND(total)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-400">
+                      Xem giỏ hàng
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "size-5 text-slate-400 transition-transform",
+                        openCart && "rotate-180"
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
             }
-          >
-            <ShoppingCart className="size-5" />
-            <span className="ml-2 font-semibold">{itemCount}</span>
-            <Separator
-              orientation="vertical"
-              className="mx-2 h-5 bg-primary-foreground/30"
-            />
-            <span>{formatVND(total)}</span>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+          />
+          <SheetContent side="bottom" className="h-[90vh] p-0 rounded-t-[2.5rem] overflow-hidden border-t-0">
             <CartPanel
               cart={cart}
               subtotal={subtotal}
@@ -365,67 +425,77 @@ export function PosClient({
         </Sheet>
       </div>
 
+      {/* Checkout Dialog */}
       <Dialog open={openCheckout} onOpenChange={setOpenCheckout}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md rounded-[2rem] border-none shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Xác nhận thanh toán</DialogTitle>
+            <DialogTitle className="text-xl font-black flex items-center gap-2">
+               <Receipt className="size-5 text-primary" />
+               Xác nhận thanh toán
+            </DialogTitle>
             <DialogDescription>
               Vui lòng kiểm tra lại thông tin trước khi tạo hoá đơn.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="rounded-lg border p-3 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Số mặt hàng</span>
-                <span className="font-medium">{itemCount}</span>
+          <div className="space-y-4 py-4">
+            <div className="rounded-2xl bg-slate-50 p-4 space-y-3 border border-slate-100">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground font-medium">Số lượng hàng</span>
+                <span className="font-bold">{itemCount} sản phẩm</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tạm tính</span>
-                <span className="font-medium">{formatVND(subtotal)}</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground font-medium">Tạm tính</span>
+                <span className="font-bold">{formatVND(subtotal)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Giảm giá</span>
-                <span className="font-medium text-destructive">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground font-medium">Giảm giá thêm</span>
+                <span className="font-bold text-destructive">
                   -{formatVND(discount)}
                 </span>
               </div>
-              <Separator />
-              <div className="flex justify-between text-base">
-                <span className="font-semibold">Tổng cộng</span>
-                <span className="font-bold text-primary">
+              <Separator className="bg-slate-200" />
+              <div className="flex justify-between items-center">
+                <span className="font-black text-slate-900 uppercase tracking-wider text-xs">Tổng cộng</span>
+                <span className="text-2xl font-black text-primary">
                   {formatVND(total)}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Phương thức thanh toán</Label>
-              <SelectField
-                value={paymentMethod}
-                onValueChange={setPaymentMethod}
-                options={PAYMENT_OPTIONS}
-                className="w-full"
-              />
-            </div>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground ml-1">Phương thức thanh toán</Label>
+                <SelectField
+                  value={paymentMethod}
+                  onValueChange={setPaymentMethod}
+                  options={PAYMENT_OPTIONS}
+                  className="w-full h-11 rounded-xl border-slate-200 font-bold"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label>Ghi chú</Label>
-              <Textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Ghi chú cho hoá đơn..."
-                rows={2}
-              />
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground ml-1">Ghi chú đơn hàng</Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Ví dụ: Giao hàng tận nơi, khuyến mãi đặc biệt..."
+                  className="rounded-xl border-slate-200 focus-visible:ring-primary/20"
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setOpenCheckout(false)}>
-              Huỷ
+          <DialogFooter className="gap-3 sm:gap-0 sm:flex-row flex-col">
+            <Button variant="ghost" onClick={() => setOpenCheckout(false)} className="rounded-xl h-12 font-bold flex-1">
+              Quay lại
             </Button>
-            <Button onClick={() => confirmCheckout()} disabled={pending}>
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              <Receipt className="size-4" />
-              Lưu & In bill
+            <Button 
+              onClick={() => confirmCheckout()} 
+              disabled={pending}
+              className="rounded-xl h-12 font-black flex-1 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+            >
+              {pending ? <Loader2 className="size-4 animate-spin mr-2" /> : <Receipt className="size-4 mr-2" />}
+              XÁC NHẬN & IN BILL
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -465,17 +535,23 @@ function CartPanel({
 }) {
   return (
     <Card
-      className={`flex flex-col h-full max-h-[calc(100vh-160px)] gap-0 p-0 ${className}`}
+      className={`flex flex-col h-full max-h-[calc(100vh-140px)] border border-border/80 shadow-lg rounded-3xl overflow-hidden bg-card/65 backdrop-blur-sm ${className}`}
     >
-      <div className="p-3 border-b flex items-center gap-2">
-        <ShoppingCart className="size-4" />
-        <span className="font-semibold text-sm">Giỏ hàng</span>
-        <Badge variant="secondary" className="ml-auto">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between bg-gradient-to-r from-primary/5 to-transparent">
+        <div className="flex items-center gap-2">
+          <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
+            <ShoppingCart className="size-4" />
+          </div>
+          <span className="font-bold text-sm tracking-tight">Giỏ hàng</span>
+        </div>
+        <Badge variant="secondary" className="rounded-lg font-bold px-2 py-0.5 bg-background border shadow-sm">
           {cart.length} mặt hàng
         </Badge>
       </div>
 
-      <div className="p-3 border-b">
+      {/* Customer Selection */}
+      <div className="p-4 border-b border-border/60 bg-muted/30">
         <CustomerPhoneField
           customers={customers}
           value={customer}
@@ -483,75 +559,79 @@ function CartPanel({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+      {/* Cart Items */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 [scrollbar-width:thin]">
         {cart.length === 0 ? (
-          <div className="text-center text-sm text-muted-foreground py-10 px-4">
-            <ShoppingCart className="size-8 mx-auto mb-3 text-muted-foreground/50" />
-            Chưa có sản phẩm nào. <br />
-            Bấm vào sản phẩm để thêm vào giỏ.
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 gap-4 opacity-50">
+            <div className="size-20 rounded-full bg-slate-100 flex items-center justify-center text-slate-300">
+               <ShoppingCart className="size-10" />
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-slate-500">Giỏ hàng đang trống</p>
+              <p className="text-xs text-slate-400">Chọn sản phẩm bên trái để bắt đầu thanh toán.</p>
+            </div>
           </div>
         ) : (
           cart.map((item) => (
             <div
               key={item.productId}
-              className="rounded-lg border p-2.5 space-y-2 bg-card"
+              className="group relative rounded-2xl border border-border/60 p-3.5 space-y-3 bg-white/50 hover:bg-white hover:border-primary/20 hover:shadow-md transition-all"
             >
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium leading-snug line-clamp-2">
+                  <div className="text-[13px] font-bold text-slate-800 leading-snug line-clamp-2">
                     {item.name}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
+                  <div className="text-[11px] font-bold text-primary mt-1">
                     {formatVND(item.unitPrice)}
                   </div>
                 </div>
                 <button
                   onClick={() => removeItem(item.productId)}
-                  className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                  className="size-7 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors flex items-center justify-center"
                   aria-label="Xoá"
                 >
-                  <X className="size-4" />
+                  <Trash2 className="size-3.5" />
                 </button>
               </div>
 
-              <Input
-                placeholder="IMEI / Serial (nếu có)"
-                value={item.imei || ""}
-                onChange={(e) => updateImei(item.productId, e.target.value)}
-                className="h-7 text-xs"
-              />
+              <div className="relative group/imei">
+                 <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                    <Smartphone className="size-3" />
+                 </div>
+                 <Input
+                    placeholder="IMEI / Serial number..."
+                    value={item.imei || ""}
+                    onChange={(e) => updateImei(item.productId, e.target.value)}
+                    className="h-8 pl-8 text-[11px] rounded-lg bg-background/50 border-border/40 focus-visible:ring-primary/20"
+                 />
+              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center border rounded-md">
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center bg-muted/50 rounded-xl border border-border/40 p-0.5">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-7"
+                    className="size-7 rounded-lg hover:bg-white shadow-sm"
                     onClick={() => updateQty(item.productId, item.quantity - 1)}
                   >
                     <Minus className="size-3" />
                   </Button>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateQty(item.productId, Number(e.target.value) || 0)
-                    }
-                    className="h-7 w-12 text-center border-0 shadow-none focus-visible:ring-0 p-0"
-                  />
+                  <div className="w-10 text-center text-xs font-black">
+                    {item.quantity}
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-7"
+                    className="size-7 rounded-lg hover:bg-white shadow-sm"
                     onClick={() => updateQty(item.productId, item.quantity + 1)}
                   >
                     <Plus className="size-3" />
                   </Button>
                 </div>
-                <div className="text-sm font-semibold">
+                <div className="text-sm font-black text-slate-900">
                   {formatVND(item.unitPrice * item.quantity)}
                 </div>
               </div>
@@ -560,48 +640,67 @@ function CartPanel({
         )}
       </div>
 
-      <div className="border-t p-3 space-y-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Giảm giá</Label>
-          <Input
-            type="number"
-            min={0}
-            value={discount}
-            onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-            placeholder="0"
-            className="h-8"
-          />
+      {/* Footer / Summary */}
+      <div className="border-t border-border/60 p-5 bg-gradient-to-b from-transparent to-primary/5 space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+             <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Giảm giá trực tiếp</Label>
+             {discount > 0 && (
+                <button onClick={() => setDiscount(0)} className="text-[10px] font-bold text-primary hover:underline">Xoá giảm giá</button>
+             )}
+          </div>
+          <div className="relative">
+             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                <Minus className="size-3" />
+             </div>
+             <Input
+                type="number"
+                min={0}
+                value={discount || ""}
+                onChange={(e) => setDiscount(Number(e.target.value) || 0)}
+                placeholder="Nhập số tiền giảm..."
+                className="h-10 pl-8 rounded-xl bg-background/50 border-border/60 font-bold text-sm text-red-600 focus-visible:ring-primary/20"
+             />
+          </div>
         </div>
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between text-muted-foreground">
+
+        <div className="space-y-2 py-2">
+          <div className="flex justify-between text-xs font-bold text-slate-500">
             <span>Tạm tính</span>
             <span>{formatVND(subtotal)}</span>
           </div>
-          <div className="flex justify-between text-muted-foreground">
+          <div className="flex justify-between text-xs font-bold text-red-500">
             <span>Giảm giá</span>
-            <span className="text-destructive">-{formatVND(discount)}</span>
+            <span>-{formatVND(discount)}</span>
           </div>
-          <Separator className="my-1" />
-          <div className="flex justify-between text-base font-bold">
-            <span>Tổng</span>
-            <span className="text-primary">{formatVND(total)}</span>
+          <div className="pt-2 flex justify-between items-center">
+            <span className="font-black text-slate-900 uppercase tracking-widest text-[11px]">Tổng cộng</span>
+            <span className="text-2xl font-black text-primary tracking-tight">{formatVND(total)}</span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+
+        <div className="grid grid-cols-5 gap-2">
           <Button
             variant="outline"
+            className="col-span-2 h-12 rounded-xl border-border/60 font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all"
             onClick={() => {
-              cart.forEach((c) => removeItem(c.productId));
-              setDiscount(0);
+               if (window.confirm("Bạn có muốn xoá toàn bộ giỏ hàng?")) {
+                  cart.forEach((c) => removeItem(c.productId));
+                  setDiscount(0);
+               }
             }}
             disabled={cart.length === 0}
           >
-            <Trash2 className="size-4" />
-            Xoá hết
+            <X className="size-4 mr-2" />
+            Huỷ đơn
           </Button>
-          <Button onClick={onCheckout} disabled={cart.length === 0}>
-            <Receipt className="size-4" />
-            Thanh toán
+          <Button 
+            className="col-span-3 h-12 rounded-xl font-black bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
+            onClick={onCheckout} 
+            disabled={cart.length === 0}
+          >
+            <Receipt className="size-4 mr-2" />
+            THANH TOÁN
           </Button>
         </div>
       </div>

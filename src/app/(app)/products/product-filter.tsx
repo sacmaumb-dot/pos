@@ -50,7 +50,7 @@ export function ProductFilter({
         onValueChange={setCat}
         className="sm:w-56"
         options={[
-          { value: "all", label: "Tất cả danh mục" },
+          { value: "all", label: "Tất cả loại hình" },
           ...categories.map((c) => ({ value: c.type, label: c.name })),
         ]}
       />

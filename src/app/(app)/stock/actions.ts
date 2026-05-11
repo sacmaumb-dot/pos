@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -17,7 +17,7 @@ async function recordMovement(
   input: StockInput,
   userId: string,
 ) {
-  const product = await prisma.product.findUnique({
+  const product = await (await getTenantPrismaServer()).product.findUnique({
     where: { id: input.productId },
   });
   if (!product) return { ok: false as const, error: "Sản phẩm không tồn tại" };
@@ -34,12 +34,12 @@ async function recordMovement(
       error: `Tồn kho không đủ (hiện có ${before}, yêu cầu xuất ${Math.abs(delta)})`,
     };
 
-  await prisma.$transaction([
-    prisma.product.update({
+  await (await getTenantPrismaServer()).$transaction([
+    (await getTenantPrismaServer()).product.update({
       where: { id: input.productId },
       data: { stock: after },
     }),
-    prisma.stockMovement.create({
+    (await getTenantPrismaServer()).stockMovement.create({
       data: {
         type,
         quantity: delta,
@@ -82,19 +82,19 @@ export async function stockAdjust(input: {
   const session = await requireSession();
   if (input.newStock < 0)
     return { ok: false as const, error: "Tồn kho không thể âm" };
-  const product = await prisma.product.findUnique({
+  const product = await (await getTenantPrismaServer()).product.findUnique({
     where: { id: input.productId },
   });
   if (!product) return { ok: false as const, error: "Sản phẩm không tồn tại" };
   const delta = input.newStock - product.stock;
   if (delta === 0) return { ok: true as const, before: product.stock, after: product.stock };
 
-  await prisma.$transaction([
-    prisma.product.update({
+  await (await getTenantPrismaServer()).$transaction([
+    (await getTenantPrismaServer()).product.update({
       where: { id: input.productId },
       data: { stock: input.newStock },
     }),
-    prisma.stockMovement.create({
+    (await getTenantPrismaServer()).stockMovement.create({
       data: {
         type: "adjust",
         quantity: delta,

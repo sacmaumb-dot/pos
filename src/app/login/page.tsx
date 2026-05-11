@@ -1,8 +1,40 @@
 import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 import { Laptop, Smartphone, Wrench } from "lucide-react";
+import { getSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { getSettings, getTenantFromHeader } from "@/lib/settings";
+import { DomainForm } from "./domain-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ admin?: string }>;
+}) {
+  const { admin } = await searchParams;
+  const user = await getSession();
+  const headersList = await headers();
+  const slug = headersList.get("x-tenant-slug");
+  const tenant = await getTenantFromHeader();
+  const isAdminMode = admin === "true";
+
+  // Block access to invalid subdomains
+  if (slug && !tenant) {
+    const isLocalhost = headersList.get("host")?.includes("localhost");
+    const rootDomain = isLocalhost ? "http://localhost:3000" : "https://mypos.vn";
+    redirect(rootDomain + "/login");
+  }
+
+  // If already logged in to THIS tenant, go to dashboard
+  if (user && tenant && user.tenantId === tenant.id) {
+    redirect("/");
+  }
+
+  const settings = await getSettings();
+  const isRootDomain = !slug || slug === "www";
+  const shopName = tenant ? settings.shopName : "MyPOS";
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       <div className="hidden lg:flex flex-col justify-between bg-gradient-to-br from-primary via-primary to-blue-700 p-12 text-primary-foreground">
@@ -10,13 +42,13 @@ export default function LoginPage() {
           <div className="size-10 rounded-xl bg-white/15 flex items-center justify-center">
             <Laptop className="size-6" />
           </div>
-          TechShop
+          {shopName}
         </div>
         <div className="space-y-6">
           <h1 className="text-4xl font-bold leading-tight">
             Hệ thống quản lý cửa hàng
             <br />
-            Laptop & Điện thoại
+            {tenant ? settings.shopTagline || "Laptop & Điện thoại" : "Laptop & Điện thoại"}
           </h1>
           <p className="text-lg text-white/80 max-w-md">
             Quản lý bán hàng, sửa chữa, dịch vụ, kho hàng và khách hàng
@@ -29,7 +61,7 @@ export default function LoginPage() {
           </div>
         </div>
         <p className="text-sm text-white/60">
-          © {new Date().getFullYear()} TechShop. All rights reserved.
+          © {new Date().getFullYear()} {shopName}. All rights reserved.
         </p>
       </div>
 
@@ -39,34 +71,38 @@ export default function LoginPage() {
             <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Laptop className="size-6" />
             </div>
-            TechShop
+            {shopName}
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight">Đăng nhập</h2>
+            <h2 className="text-2xl font-bold tracking-tight">
+              {isRootDomain 
+                ? (isAdminMode ? "Quản trị hệ thống" : "Xác định cửa hàng") 
+                : "Đăng nhập"}
+            </h2>
             <p className="text-muted-foreground text-sm">
-              Vui lòng nhập thông tin tài khoản để truy cập hệ thống.
+              {isRootDomain 
+                ? (isAdminMode 
+                   ? "Vui lòng nhập tài khoản quản trị MyPOS." 
+                   : "Vui lòng nhập tên miền cửa hàng của bạn để tiếp tục.") 
+                : `Truy cập vào hệ thống của ${shopName}.`}
             </p>
           </div>
           <Suspense fallback={null}>
-            <LoginForm />
+            {(isRootDomain && !isAdminMode) ? (
+              <DomainForm host={headersList.get("host") || ""} />
+            ) : (
+              <LoginForm />
+            )}
           </Suspense>
-          <div className="rounded-lg border bg-muted/30 p-4 text-xs text-muted-foreground space-y-1">
-            <div className="font-medium text-foreground mb-1">
-              Tài khoản demo:
+          
+          {isRootDomain && (
+            <div className="text-center text-sm text-muted-foreground pt-4">
+              Bạn chưa có cửa hàng?{" "}
+              <a href="/signup" className="text-primary font-bold hover:underline">
+                Đăng ký ngay
+              </a>
             </div>
-            <div>
-              <span className="font-mono">admin@shop.vn</span> / admin123
-              <span className="text-primary ml-1">(Quản trị)</span>
-            </div>
-            <div>
-              <span className="font-mono">staff@shop.vn</span> / staff123
-              <span className="text-primary ml-1">(Nhân viên)</span>
-            </div>
-            <div>
-              <span className="font-mono">tech@shop.vn</span> / tech123
-              <span className="text-primary ml-1">(Kỹ thuật viên)</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

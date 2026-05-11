@@ -1,5 +1,31 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Print & Template Reset */
+.premium-receipt table,
+.premium-receipt tr,
+.premium-receipt td,
+.premium-receipt th,
+.ql-editor table,
+.ql-editor tr,
+.ql-editor td,
+.ql-editor th,
+.print-preview-content table,
+.print-preview-content tr,
+.print-preview-content td,
+.print-preview-content th {
+  border: none !important;
+  border-collapse: collapse !important;
+}
+
+.premium-receipt .section-label {
+  border-bottom: 1px solid #eee !important;
+}
+
+/* Specific product table lines */
+.product-table-header {
+  border-top: 1px solid #000 !important;
+  border-bottom: 1px solid #000 !important;
+}
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import {
@@ -6,12 +6,14 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Shield, UserCog, Wrench, Mail, Calendar } from "lucide-react";
+import { Settings, Shield, UserCog, Wrench, Mail, Calendar, UserPlus, Fingerprint, Lock, ShieldCheck } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { NewUserDialog } from "./new-user-dialog";
 import { UserRowActions } from "./user-actions";
+import { cn } from "@/lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Quản trị",
@@ -20,22 +22,28 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_ICONS: Record<string, React.ReactNode> = {
-  admin: <Shield className="size-3.5" />,
+  admin: <ShieldCheck className="size-3.5" />,
   staff: <UserCog className="size-3.5" />,
   technician: <Wrench className="size-3.5" />,
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  staff: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  technician: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  admin: "bg-purple-50 text-purple-600 border-purple-100",
+  staff: "bg-blue-50 text-blue-600 border-blue-100",
+  technician: "bg-amber-50 text-amber-600 border-amber-100",
 };
 
 export default async function UsersPage() {
   const session = await getSession();
   if (!session || session.role !== "admin") redirect("/");
 
-  const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
+  const prisma = await getTenantPrismaServer();
+  const users = await prisma.user.findMany({ 
+    include: { branch: true },
+    orderBy: { createdAt: "desc" } 
+  });
+  const branches = await prisma.branch.findMany({ select: { id: true, name: true } });
+
   const counts = {
     admin: users.filter((u) => u.role === "admin").length,
     staff: users.filter((u) => u.role === "staff").length,
@@ -44,66 +52,85 @@ export default async function UsersPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6 pb-12">
+      {/* Header section matched with Customers style */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent p-6 rounded-2xl border border-border/50">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Người dùng</h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý tài khoản nhân viên và phân quyền hệ thống.
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <UserCog className="size-6 text-primary" />
+            Quản trị nhân sự
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Phân quyền truy cập, quản lý tài khoản nhân viên và theo dõi hoạt động hệ thống.
           </p>
         </div>
-        <NewUserDialog />
+        <NewUserDialog branches={branches} />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI Stats matched with Customers style */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
-          icon={<Settings className="size-4" />}
+          icon={<Fingerprint className="size-5" />}
           label="Tổng tài khoản"
           value={String(users.length)}
-          tone="primary"
+          subValue="Thành viên hệ thống"
+          gradient="from-slate-500 to-slate-700"
         />
         <Kpi
-          icon={<Shield className="size-4" />}
-          label="Quản trị"
+          icon={<ShieldCheck className="size-5" />}
+          label="Quản trị viên"
           value={String(counts.admin)}
+          subValue="Toàn quyền hệ thống"
+          gradient="from-purple-500 to-indigo-600"
         />
         <Kpi
-          icon={<UserCog className="size-4" />}
-          label="Nhân viên"
+          icon={<UserCog className="size-5" />}
+          label="Nhân viên POS"
           value={String(counts.staff)}
+          subValue="Bán hàng & Kho"
+          gradient="from-blue-500 to-indigo-600"
         />
         <Kpi
-          icon={<Wrench className="size-4" />}
+          icon={<Wrench className="size-5" />}
           label="Kỹ thuật viên"
           value={String(counts.technician)}
+          subValue="Dịch vụ sửa chữa"
+          gradient="from-amber-400 to-orange-600"
         />
       </div>
 
-      <Card>
-        <CardHeader className="border-b pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Settings className="size-4" />
-            Danh sách ({users.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-            {users.map((u) => {
-              const initials = u.name
-                .split(" ")
-                .filter(Boolean)
-                .slice(-2)
-                .map((p) => p[0])
-                .join("")
-                .toUpperCase();
-              const roleColor =
-                ROLE_COLORS[u.role] || "bg-muted text-muted-foreground";
-              return (
-                <div
-                  key={u.id}
-                  className="rounded-md border bg-card hover:border-primary/60 hover:shadow-sm transition-all p-3 group relative"
-                >
-                  <div className="absolute right-1.5 top-1.5 z-10 opacity-0 group-hover:opacity-100 transition">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {users.map((u) => {
+          const initials = u.name
+            .split(" ")
+            .filter(Boolean)
+            .slice(-2)
+            .map((p) => p[0])
+            .join("")
+            .toUpperCase();
+          const roleStyle = ROLE_COLORS[u.role] || "bg-slate-50 text-slate-600 border-slate-100";
+          
+          return (
+            <Card 
+              key={u.id}
+              className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm group hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300"
+            >
+              <CardContent className="p-0">
+                {/* Header Decoration */}
+                <div className={cn(
+                  "h-1.5 w-full",
+                  u.role === "admin" ? "bg-purple-500" :
+                  u.role === "staff" ? "bg-blue-500" : "bg-amber-500"
+                )} />
+                
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className={cn(
+                      "size-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-sm border border-border/40",
+                      roleStyle
+                    )}>
+                      {initials || <UserCog className="size-6" />}
+                    </div>
                     <UserRowActions
                       user={{
                         id: u.id,
@@ -114,53 +141,65 @@ export default async function UsersPage() {
                       }}
                     />
                   </div>
-                  <div className="flex items-start gap-2.5">
-                    <div
-                      className={`size-10 shrink-0 rounded-full flex items-center justify-center font-semibold text-sm ${roleColor}`}
-                    >
-                      {initials || <UserCog className="size-4" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">
-                        {u.name}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-                        <Mail className="size-3 shrink-0" />
-                        <span className="truncate">{u.email}</span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Calendar className="size-3" />
-                        Tạo {formatDate(u.createdAt)}
-                      </div>
+
+                  <div className="mt-4 space-y-1">
+                    <h3 className="font-bold text-foreground text-lg group-hover:text-primary transition-colors">{u.name}</h3>
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-sm font-medium">
+                      <Mail className="size-3.5" />
+                      {u.email}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] gap-1 ${roleColor}`}
-                    >
+
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    <Badge variant="outline" className={cn("font-bold gap-1 px-2.5 py-1 rounded-xl shadow-none", roleStyle)}>
                       {ROLE_ICONS[u.role]}
                       {ROLE_LABELS[u.role] || u.role}
                     </Badge>
+                    
+                    {u.branch && (
+                      <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-100 font-bold gap-1 px-2.5 py-1 rounded-xl shadow-none">
+                        <Settings className="size-3" />
+                        {u.branch.name}
+                      </Badge>
+                    )}
+
                     {u.active ? (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      >
+                      <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-50 font-bold gap-1 px-2.5 py-1 rounded-xl shadow-none">
+                        <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Hoạt động
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px]">
-                        Tạm khoá
+                      <Badge className="bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-100 font-bold gap-1 px-2.5 py-1 rounded-xl shadow-none">
+                        <Lock className="size-3" />
+                        Tạm khóa
                       </Badge>
                     )}
                   </div>
+
+                  <div className="mt-6 pt-6 border-t border-border/50 flex items-center justify-between">
+                     <div className="flex items-center gap-1.5 text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">
+                        <Calendar className="size-3" />
+                        Tham gia {formatDate(u.createdAt)}
+                     </div>
+                     {u.role === "admin" && <Shield className="size-4 text-purple-200" />}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        {/* Quick Add Placeholder */}
+        <div className="border-2 border-dashed border-border/80 rounded-2xl flex flex-col items-center justify-center p-8 text-center space-y-4 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer min-h-[280px]">
+           <div className="size-16 rounded-full bg-card text-muted-foreground/40 flex items-center justify-center border border-border/60">
+              <UserPlus className="size-8" />
+           </div>
+           <div>
+              <p className="font-bold text-foreground">Thêm thành viên</p>
+              <p className="text-xs text-muted-foreground font-medium px-4">Tạo thêm tài khoản để vận hành hệ thống</p>
+           </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -169,30 +208,29 @@ function Kpi({
   icon,
   label,
   value,
-  tone,
+  subValue,
+  gradient,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone?: "primary";
+  subValue: string;
+  gradient: string;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
+    <Card className="border border-border/80 shadow-md rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm group hover:border-primary/30 hover:shadow-lg transition-all duration-300">
+      <CardContent className="p-5 flex items-center gap-4">
         <div
-          className={`size-10 rounded-md flex items-center justify-center ${
-            tone === "primary"
-              ? "bg-primary/10 text-primary"
-              : "bg-muted text-muted-foreground"
-          }`}
+          className={`size-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-tr ${gradient} shadow-lg shadow-primary/5 group-hover:scale-105 transition-transform duration-300`}
         >
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+          <div className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
             {label}
           </div>
-          <div className="text-base font-bold truncate">{value}</div>
+          <div className="text-lg font-black text-foreground mt-0.5 truncate">{value}</div>
+          <div className="text-[10px] text-muted-foreground font-medium">{subValue}</div>
         </div>
       </CardContent>
     </Card>

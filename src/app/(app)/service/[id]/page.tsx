@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import {
@@ -52,7 +52,7 @@ export default async function ServiceDetailPage({
 }) {
   const { id } = await params;
   const [ticket, technicians, products] = await Promise.all([
-    prisma.serviceTicket.findUnique({
+    (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id },
       include: {
         customer: true,
@@ -62,11 +62,11 @@ export default async function ServiceDetailPage({
         history: { orderBy: { createdAt: "desc" } },
       },
     }),
-    prisma.user.findMany({
+    (await getTenantPrismaServer()).user.findMany({
       where: { active: true, role: { in: ["technician", "admin"] } },
       orderBy: { name: "asc" },
     }),
-    prisma.product.findMany({
+    (await getTenantPrismaServer()).product.findMany({
       where: { isActive: true },
       include: { category: true },
       orderBy: { name: "asc" },

@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
@@ -52,38 +52,40 @@ export async function createServiceTicket(input: {
           error: "Vui lòng nhập đầy đủ SĐT và tên khách hàng",
         };
       }
-      const existing = await prisma.customer.findFirst({ where: { phone } });
+      const existing = await (await getTenantPrismaServer()).customer.findFirst({ where: { phone } });
       if (existing) {
         customerId = existing.id;
       } else {
-        const allCust = await prisma.customer.findMany({ select: { code: true } });
+        const allCust = await (await getTenantPrismaServer()).customer.findMany({ select: { code: true } });
         const maxCustNum = allCust.reduce((m, c) => {
           const n = parseInt(c.code.replace(/\D/g, "")) || 0;
           return n > m ? n : m;
         }, 0);
-        const created = await prisma.customer.create({
+        const created = await (await getTenantPrismaServer()).customer.create({
           data: {
             code: `KH${String(maxCustNum + 1).padStart(5, "0")}`,
             name,
             phone,
+            tenantId: session.tenantId,
           },
         });
         customerId = created.id;
       }
     }
 
-    const allTickets = await prisma.serviceTicket.findMany({ select: { code: true } });
+    const allTickets = await (await getTenantPrismaServer()).serviceTicket.findMany({ select: { code: true } });
     const maxNum = allTickets.reduce((m, t) => {
       const n = parseInt(t.code.replace(/\D/g, "")) || 0;
       return n > m ? n : m;
     }, 0);
     const code = `SC${String(maxNum + 1).padStart(5, "0")}`;
 
-    const ticket = await prisma.serviceTicket.create({
+    const ticket = await (await getTenantPrismaServer()).serviceTicket.create({
       data: {
         code,
         customerId,
         createdById: session.id,
+        tenantId: session.tenantId,
         assignedToId: input.assignedToId,
         deviceType: input.device.type,
         deviceBrand: input.device.brand,
@@ -115,7 +117,7 @@ export async function createServiceTicket(input: {
       },
     });
 
-    const customer = await prisma.customer.findUnique({
+    const customer = await (await getTenantPrismaServer()).customer.findUnique({
       where: { id: customerId },
       select: { name: true, phone: true },
     });
@@ -154,7 +156,7 @@ export async function updateServiceStatus(
 ) {
   try {
     const session = await requireSession();
-    await prisma.$transaction(async (tx) => {
+    await (await getTenantPrismaServer()).$transaction(async (tx) => {
       const data: {
         status: string;
         completedAt?: Date;
@@ -171,7 +173,7 @@ export async function updateServiceStatus(
       });
     });
 
-    const ticket = await prisma.serviceTicket.findUnique({
+    const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id: ticketId },
       include: { customer: true },
     });
@@ -231,11 +233,11 @@ export async function updateServiceTicket(
     const session = await requireSession();
     const { customerName, customerPhone, promisedAt, assignedToId, ...rest } =
       data;
-    const before = await prisma.serviceTicket.findUnique({
+    const before = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id: ticketId },
       select: { assignedToId: true, code: true, customer: { select: { name: true } }, deviceBrand: true, deviceModel: true, deviceType: true },
     });
-    await prisma.serviceTicket.update({
+    await (await getTenantPrismaServer()).serviceTicket.update({
       where: { id: ticketId },
       data: {
         ...rest,
@@ -272,12 +274,12 @@ export async function updateServiceTicket(
       });
     }
     if (customerName !== undefined || customerPhone !== undefined) {
-      const ticket = await prisma.serviceTicket.findUnique({
+      const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
         where: { id: ticketId },
         select: { customerId: true },
       });
       if (ticket) {
-        await prisma.customer.update({
+        await (await getTenantPrismaServer()).customer.update({
           where: { id: ticket.customerId },
           data: {
             ...(customerName !== undefined ? { name: customerName } : {}),
@@ -307,7 +309,7 @@ export async function addServiceItems(
 ) {
   try {
     await requireSession();
-    const ticket = await prisma.serviceTicket.findUnique({
+    const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id: ticketId },
       select: { id: true, status: true },
     });
@@ -315,7 +317,7 @@ export async function addServiceItems(
     if (ticket.status === "delivered") {
       return { ok: false as const, error: "Phiếu đã trả máy" };
     }
-    await prisma.$transaction(async (tx) => {
+    await (await getTenantPrismaServer()).$transaction(async (tx) => {
       for (const it of items) {
         if (!it.description || it.quantity <= 0) continue;
         await tx.serviceItem.create({
@@ -347,7 +349,7 @@ export async function addServiceItems(
 export async function removeServiceItem(itemId: string) {
   try {
     await requireSession();
-    const item = await prisma.serviceItem.findUnique({
+    const item = await (await getTenantPrismaServer()).serviceItem.findUnique({
       where: { id: itemId },
       include: { ticket: { select: { id: true, status: true } } },
     });
@@ -355,7 +357,7 @@ export async function removeServiceItem(itemId: string) {
     if (item.ticket.status === "delivered") {
       return { ok: false as const, error: "Phiếu đã trả máy" };
     }
-    await prisma.$transaction(async (tx) => {
+    await (await getTenantPrismaServer()).$transaction(async (tx) => {
       await tx.serviceItem.delete({ where: { id: itemId } });
       const all = await tx.serviceItem.findMany({
         where: { ticketId: item.ticketId },
@@ -385,7 +387,7 @@ export async function deliverService(input: {
 }) {
   try {
     await requireSession();
-    const ticket = await prisma.serviceTicket.findUnique({
+    const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id: input.ticketId },
       include: { items: true },
     });
@@ -396,7 +398,7 @@ export async function deliverService(input: {
       return { ok: false as const, error: "Phiếu đã trả máy" };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await (await getTenantPrismaServer()).$transaction(async (tx) => {
       for (const it of input.extraItems) {
         await tx.serviceItem.create({
           data: {
@@ -461,7 +463,7 @@ export async function deliverService(input: {
 export async function getTicketForTab(id: string) {
   try {
     await requireSession();
-    const ticket = await prisma.serviceTicket.findUnique({
+    const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id },
       include: {
         customer: true,

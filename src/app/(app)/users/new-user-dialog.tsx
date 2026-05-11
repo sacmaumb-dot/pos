@@ -18,7 +18,7 @@ import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createUser } from "./actions";
 
-export function NewUserDialog() {
+export function NewUserDialog({ branches }: { branches: { id: string; name: string }[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -27,6 +27,7 @@ export function NewUserDialog() {
     email: "",
     password: "",
     role: "staff",
+    branchId: branches[0]?.id || "",
   });
 
   function set<K extends keyof typeof form>(k: K, v: string | null) {
@@ -47,7 +48,7 @@ export function NewUserDialog() {
       if (res.ok) {
         toast.success("Đã thêm tài khoản");
         setOpen(false);
-        setForm({ name: "", email: "", password: "", role: "staff" });
+        setForm({ name: "", email: "", password: "", role: "staff", branchId: branches[0]?.id || "" });
         router.refresh();
       } else {
         toast.error(res.error || "Lỗi");
@@ -103,6 +104,15 @@ export function NewUserDialog() {
                 { value: "technician", label: "Kỹ thuật viên" },
                 { value: "admin", label: "Quản trị viên" },
               ]}
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Chi nhánh làm việc</Label>
+            <SelectField
+              value={form.branchId}
+              onValueChange={(v) => set("branchId", v)}
+              options={branches.map(b => ({ value: b.id, label: b.name }))}
               className="w-full"
             />
           </div>

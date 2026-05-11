@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import {
   Card,
   CardContent,
@@ -22,6 +22,12 @@ import {
   Wrench,
   Users,
   BarChart3,
+  PieChart,
+  Calendar,
+  ChevronRight,
+  ArrowUpRight,
+  DollarSign,
+  Package
 } from "lucide-react";
 import { RevenueChart } from "@/components/revenue-chart";
 import { ReportTabs } from "./report-tabs";
@@ -30,6 +36,7 @@ import {
   type ReconRow,
   type ReconStaff,
 } from "./reconciliation";
+import { cn } from "@/lib/utils";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
@@ -69,14 +76,20 @@ function ReportsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Báo cáo</h1>
-        <p className="text-sm text-muted-foreground">
-          Tổng hợp doanh thu và đối soát ca trực nhân viên.
-        </p>
+    <div className="space-y-6 pb-12">
+      {/* Header section matched with Customers style */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent p-6 rounded-2xl border border-border/50">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <BarChart3 className="size-6 text-primary" />
+            Báo cáo & Phân tích
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Theo dõi hiệu quả kinh doanh, doanh thu và hiệu suất làm việc của nhân viên.
+          </p>
+        </div>
+        <ReportTabs active={active} />
       </div>
-      <ReportTabs active={active} />
       {children}
     </div>
   );
@@ -89,12 +102,12 @@ async function ShiftsTab({ date }: { date: string }) {
   end.setDate(end.getDate() + 1);
 
   const [sales, tickets, users] = await Promise.all([
-    prisma.sale.findMany({
+    (await getTenantPrismaServer()).sale.findMany({
       where: { createdAt: { gte: start, lt: end }, status: "paid" },
       include: { customer: true, user: true },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.serviceTicket.findMany({
+    (await getTenantPrismaServer()).serviceTicket.findMany({
       where: {
         deliveredAt: { gte: start, lt: end },
         status: "delivered",
@@ -102,7 +115,7 @@ async function ShiftsTab({ date }: { date: string }) {
       include: { customer: true, createdBy: true },
       orderBy: { deliveredAt: "asc" },
     }),
-    prisma.user.findMany({ orderBy: { name: "asc" } }),
+    (await getTenantPrismaServer()).user.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const userMap = new Map(users.map((u) => [u.id, u]));
@@ -167,28 +180,35 @@ async function ShiftsTab({ date }: { date: string }) {
       .reduce((s, x) => s + x.finalCost, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
-          label="Tổng doanh thu ngày"
+          label="Doanh thu ngày"
           value={formatVND(total)}
-          icon={<TrendingUp className="size-4" />}
-          tone="primary"
+          subValue="Tổng thu trong ngày"
+          icon={<TrendingUp className="size-5" />}
+          gradient="from-emerald-400 to-teal-600"
         />
         <Kpi
           label="Tiền mặt"
           value={formatVND(cashTotal)}
-          icon={<ShoppingCart className="size-4" />}
+          subValue="Thu quỹ tiền mặt"
+          icon={<DollarSign className="size-5" />}
+          gradient="from-blue-500 to-indigo-600"
         />
         <Kpi
           label="Chuyển khoản"
           value={formatVND(transferTotal)}
-          icon={<Wrench className="size-4" />}
+          subValue="Thu qua ngân hàng"
+          icon={<BarChart3 className="size-5" />}
+          gradient="from-violet-500 to-fuchsia-600"
         />
         <Kpi
-          label="Số nhân viên trực"
+          label="Nhân viên"
           value={String(staff.length)}
-          icon={<Users className="size-4" />}
+          subValue="Số NV phát sinh đơn"
+          icon={<Users className="size-5" />}
+          gradient="from-slate-500 to-slate-700"
         />
       </div>
       <Reconciliation date={date} staff={staff} />
@@ -211,16 +231,16 @@ async function OverviewTab() {
     topProducts,
     paymentBreakdown,
   ] = await Promise.all([
-    prisma.sale.aggregate({
+    (await getTenantPrismaServer()).sale.aggregate({
       where: { createdAt: { gte: today }, status: "paid" },
       _sum: { total: true },
     }),
-    prisma.sale.aggregate({
+    (await getTenantPrismaServer()).sale.aggregate({
       where: { createdAt: { gte: startOfMonth }, status: "paid" },
       _sum: { total: true },
       _count: true,
     }),
-    prisma.serviceTicket.aggregate({
+    (await getTenantPrismaServer()).serviceTicket.aggregate({
       where: {
         deliveredAt: { gte: startOfMonth },
         status: "delivered",
@@ -228,19 +248,19 @@ async function OverviewTab() {
       _sum: { finalCost: true },
       _count: true,
     }),
-    prisma.sale.findMany({
+    (await getTenantPrismaServer()).sale.findMany({
       where: { createdAt: { gte: last30 }, status: "paid" },
       orderBy: { createdAt: "asc" },
       select: { createdAt: true, total: true },
     }),
-    prisma.saleItem.groupBy({
+    (await getTenantPrismaServer()).saleItem.groupBy({
       by: ["productId"],
       where: { sale: { createdAt: { gte: startOfMonth }, status: "paid" } },
       _sum: { quantity: true, subtotal: true },
       orderBy: { _sum: { subtotal: "desc" } },
       take: 10,
     }),
-    prisma.sale.groupBy({
+    (await getTenantPrismaServer()).sale.groupBy({
       by: ["paymentMethod"],
       where: { createdAt: { gte: startOfMonth }, status: "paid" },
       _sum: { total: true },
@@ -249,7 +269,7 @@ async function OverviewTab() {
   ]);
 
   const productIds = topProducts.map((p) => p.productId);
-  const productDetails = await prisma.product.findMany({
+  const productDetails = await (await getTenantPrismaServer()).product.findMany({
     where: { id: { in: productIds } },
   });
   const productMap = Object.fromEntries(productDetails.map((p) => [p.id, p]));
@@ -269,64 +289,78 @@ async function OverviewTab() {
   }));
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi
           icon={<TrendingUp className="size-5" />}
           label="Doanh thu hôm nay"
           value={formatVND(todayRevenue._sum.total || 0)}
+          subValue="Bán lẻ trong ngày"
+          gradient="from-emerald-400 to-teal-600"
         />
-        <KpiCard
+        <Kpi
           icon={<ShoppingCart className="size-5" />}
-          label={`Doanh thu tháng (${monthRevenue._count} đơn)`}
+          label="Bán lẻ tháng"
           value={formatVND(monthRevenue._sum.total || 0)}
+          subValue="Doanh số POS"
+          gradient="from-blue-500 to-indigo-600"
         />
-        <KpiCard
+        <Kpi
           icon={<Wrench className="size-5" />}
-          label={`Sửa chữa tháng (${monthServiceRevenue._count} phiếu)`}
+          label="Sửa chữa tháng"
           value={formatVND(monthServiceRevenue._sum.finalCost || 0)}
+          subValue="Doanh số dịch vụ"
+          gradient="from-amber-400 to-orange-600"
         />
-        <KpiCard
-          icon={<BarChart3 className="size-5" />}
-          label="TB doanh thu / đơn"
+        <Kpi
+          icon={<ArrowUpRight className="size-5" />}
+          label="Trung bình / Đơn"
           value={formatVND(
             monthRevenue._count
               ? (monthRevenue._sum.total || 0) / monthRevenue._count
               : 0,
           )}
+          subValue="Giá trị đơn POS"
+          gradient="from-slate-500 to-slate-700"
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Doanh thu 30 ngày qua</CardTitle>
-          <CardDescription className="text-xs">
-            Tổng doanh thu mỗi ngày trong 30 ngày trở lại đây.
-          </CardDescription>
+      <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
+        <CardHeader className="border-b border-border/60 py-4 px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+               <Calendar className="size-4 text-primary" />
+               Diễn biến doanh thu 30 ngày qua
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Tổng hợp dữ liệu bán hàng thực tế theo thời gian.
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <RevenueChart data={chartData} />
+        <CardContent className="p-6">
+          <div className="h-[350px]">
+             <RevenueChart data={chartData} />
+          </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Top 10 sản phẩm bán chạy
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
+          <CardHeader className="border-b border-border/60 py-4 px-6">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Package className="size-4 text-primary" />
+              Sản phẩm dẫn đầu doanh thu
             </CardTitle>
-            <CardDescription className="text-xs">
-              Theo doanh thu trong tháng.
-            </CardDescription>
+            <CardDescription className="text-xs">Top 10 mặt hàng có hiệu suất tốt nhất tháng.</CardDescription>
           </CardHeader>
-          <CardContent className="px-0">
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Sản phẩm</TableHead>
-                  <TableHead className="text-right">SL</TableHead>
-                  <TableHead className="text-right">Doanh thu</TableHead>
+                <TableRow className="border-b border-border/60">
+                  <TableHead className="w-16 text-center font-bold text-[10px] uppercase tracking-widest">STT</TableHead>
+                  <TableHead className="font-bold text-[10px] uppercase tracking-widest">Sản phẩm</TableHead>
+                  <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest">SL</TableHead>
+                  <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest">Doanh thu</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -334,31 +368,31 @@ async function OverviewTab() {
                   <TableRow>
                     <TableCell
                       colSpan={4}
-                      className="text-center py-6 text-muted-foreground"
+                      className="text-center py-12 text-muted-foreground text-sm"
                     >
-                      Chưa có dữ liệu
+                      Chưa có dữ liệu giao dịch trong tháng
                     </TableCell>
                   </TableRow>
                 )}
                 {topProducts.map((p, idx) => {
                   const prod = productMap[p.productId];
                   return (
-                    <TableRow key={p.productId}>
-                      <TableCell className="text-muted-foreground">
+                    <TableRow key={p.productId} className="hover:bg-muted/50 transition-colors group border-b border-border/40">
+                      <TableCell className="text-center font-bold text-muted-foreground text-xs">
                         {idx + 1}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium text-sm">
-                          {prod?.name || "—"}
+                        <div className="font-bold text-foreground text-[13px] group-hover:text-primary transition-colors">
+                          {prod?.name || "Sản phẩm không xác định"}
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                           {prod?.sku}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right font-bold text-muted-foreground text-xs">
                         {formatNumber(p._sum.quantity || 0)}
                       </TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-right font-black text-primary text-sm">
                         {formatVND(p._sum.subtotal || 0)}
                       </TableCell>
                     </TableRow>
@@ -369,21 +403,22 @@ async function OverviewTab() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Phương thức thanh toán</CardTitle>
-            <CardDescription className="text-xs">
-              Tỉ trọng doanh thu theo phương thức trong tháng.
-            </CardDescription>
+        <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
+          <CardHeader className="border-b border-border/60 py-4 px-6">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <PieChart className="size-4 text-primary" />
+              Cơ cấu phương thức thanh toán
+            </CardTitle>
+            <CardDescription className="text-xs">Tỷ trọng các nguồn thu trong tháng này.</CardDescription>
           </CardHeader>
-          <CardContent className="px-0">
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Phương thức</TableHead>
-                  <TableHead className="text-right">Số đơn</TableHead>
-                  <TableHead className="text-right">Doanh thu</TableHead>
-                  <TableHead className="text-right">%</TableHead>
+                <TableRow className="border-b border-border/60">
+                  <TableHead className="font-bold text-[10px] uppercase tracking-widest">Phương thức</TableHead>
+                  <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest">Số đơn</TableHead>
+                  <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest">Tổng tiền</TableHead>
+                  <TableHead className="text-right font-bold text-[10px] uppercase tracking-widest">Tỉ trọng</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -391,9 +426,9 @@ async function OverviewTab() {
                   <TableRow>
                     <TableCell
                       colSpan={4}
-                      className="text-center py-6 text-muted-foreground"
+                      className="text-center py-12 text-muted-foreground text-sm"
                     >
-                      Chưa có dữ liệu
+                      Chưa phát sinh thanh toán
                     </TableCell>
                   </TableRow>
                 )}
@@ -401,18 +436,23 @@ async function OverviewTab() {
                   const total = monthRevenue._sum.total || 1;
                   const pct = ((p._sum.total || 0) / total) * 100;
                   return (
-                    <TableRow key={p.paymentMethod}>
+                    <TableRow key={p.paymentMethod} className="hover:bg-muted/50 transition-colors border-b border-border/40">
                       <TableCell>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="font-bold border-border/60 text-foreground bg-muted/30 px-2 py-0.5 rounded-md text-[10px]">
                           {PAYMENT_LABELS[p.paymentMethod] || p.paymentMethod}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">{p._count}</TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-right font-bold text-muted-foreground text-xs">{p._count}</TableCell>
+                      <TableCell className="text-right font-black text-foreground text-sm">
                         {formatVND(p._sum.total || 0)}
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {pct.toFixed(1)}%
+                      <TableCell className="text-right">
+                         <div className="flex flex-col items-end">
+                            <span className="text-sm font-black text-primary">{pct.toFixed(1)}%</span>
+                            <div className="w-16 h-1 bg-muted rounded-full mt-1 overflow-hidden">
+                               <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                            </div>
+                         </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -430,58 +470,29 @@ function Kpi({
   icon,
   label,
   value,
-  tone,
+  subValue,
+  gradient,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone?: "primary";
+  subValue: string;
+  gradient: string;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
+    <Card className="border border-border/80 shadow-md rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm group hover:border-primary/30 hover:shadow-lg transition-all duration-300">
+      <CardContent className="p-5 flex items-center gap-4">
         <div
-          className={`size-10 rounded-md flex items-center justify-center ${
-            tone === "primary"
-              ? "bg-primary/10 text-primary"
-              : "bg-muted text-muted-foreground"
-          }`}
+          className={`size-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-tr ${gradient} shadow-lg shadow-primary/5 group-hover:scale-105 transition-transform duration-300`}
         >
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+          <div className="text-[10px] font-bold text-muted-foreground/80 uppercase tracking-wider">
             {label}
           </div>
-          <div className="text-base font-bold truncate">{value}</div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className="size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-            {label}
-          </div>
-          <div className="text-base font-bold tracking-tight truncate">
-            {value}
-          </div>
+          <div className="text-lg font-black text-foreground mt-0.5 truncate">{value}</div>
+          <div className="text-[10px] text-muted-foreground font-medium">{subValue}</div>
         </div>
       </CardContent>
     </Card>

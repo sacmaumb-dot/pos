@@ -1,5 +1,5 @@
-// Schema for Laptop & Phone Shop Management
-// Modules: Sales (POS), Repair/Service, Inventory, Customers, Users
+// Schema for Laptop & Phone Shop Management - Multi-tenant SaaS Version
+// Modules: Sales (POS), Repair/Service, Inventory, Customers, Users, Tenant/Subscription
 
 generator client {
   provider = "prisma-client-js"
@@ -7,45 +7,133 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// TENANTS / SAAS SUBSCRIBERS
+// ============================================
+model Tenant {
+  id     String  @id @default(cuid())
+  slug   String  @unique // Subdomain prefix (e.g. apple-care)
+  name   String
+  active Boolean @default(true)
+
+  // SaaS Subscription & 7-Day Trial
+  trialExpiresAt        DateTime
+  subscriptionPlan      String    @default("trial") // trial | basic | premium
+  subscriptionExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  settings       AppSetting[]
+  customers      Customer[]
+  categories     Category[]
+  products       Product[]
+  sales          Sale[]
+  tickets        ServiceTicket[]
+  templates      PrintTemplate[]
+  stockMovements StockMovement[]
+  sessions       Session[]
+  branches       Branch[]
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  users          User[]
+  sales          Sale[]
+  serviceTickets ServiceTicket[]
+  stockMovements StockMovement[]
+  productStocks  ProductBranchStock[]
+  sessions       Session[]
+
+  @@index([tenantId])
 }
 
 // ============================================
 // SETTINGS / APP CONFIG
 // ============================================
 model AppSetting {
-  id          String   @id @default("singleton")
-  shopName    String   @default("TechShop")
-  siteTitle   String   @default("TechShop - Quản lý cửa hàng Laptop & Điện thoại")
-  shopTagline String   @default("Laptop & Điện thoại")
-  shopAddress String?
-  shopPhone   String?
-  shopEmail   String?
-  logoUrl     String?
-  faviconUrl  String?
-  printSize   String   @default("A4") // A4 | 80mm
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  shopName        String   @default("TechShop")
+  siteTitle       String   @default("TechShop - Quản lý cửa hàng Laptop & Điện thoại")
+  shopTagline     String   @default("Laptop & Điện thoại")
+  shopAddress     String?
+  shopPhone       String?
+  shopEmail       String?
+  logoUrl         String?
+  faviconUrl      String?
+  bankId          String?
+  bankAccount     String?
+  bankAccountName String?
+  printSize       String   @default("A4") // A4 | 80mm
+  updatedAt       DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
 // USERS / AUTH
 // ============================================
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  role      String   @default("staff") // admin | staff | technician
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  password     String
+  role         String   @default("staff") // admin, staff, technician
+  active       Boolean  @default(true)
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  sales          Sale[]
-  serviceTickets ServiceTicket[] @relation("CreatedBy")
+  // Last login tracking
+  lastLoginAt DateTime?
+  lastIp      String?
+  userAgent   String?
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  sessions        Session[]
+  sales           Sale[]
+  serviceTickets  ServiceTicket[] @relation("CreatedBy")
   serviceAssigned ServiceTicket[] @relation("AssignedTo")
-  stockMovements StockMovement[]
-  notifications  Notification[]
+  stockMovements  StockMovement[]
+  notifications   Notification[]
+}
+
+// ============================================
+// PRODUCT BRANCH STOCK
+// ============================================
+model ProductBranchStock {
+  id    String @id @default(cuid())
+  stock Int    @default(0)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, branchId])
+  @@index([branchId])
 }
 
 // ============================================
@@ -53,12 +141,12 @@ model User {
 // ============================================
 model Notification {
   id        String   @id @default(cuid())
-  userId    String   // recipient
+  userId    String // recipient
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // ticket_assigned | ticket_status | low_stock | other
+  type      String // ticket_assigned | ticket_status | low_stock | other
   title     String
   body      String?
-  link      String?  // URL to navigate when clicked
+  link      String? // URL to navigate when clicked
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -66,37 +154,73 @@ model Notification {
 }
 
 // ============================================
+// SESSIONS / DEVICE TRACKING
+// ============================================
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userAgent String?
+  ipAddress String?
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, userId])
+}
+
+// ============================================
 // CUSTOMERS
 // ============================================
 model Customer {
   id        String   @id @default(cuid())
-  code      String   @unique // KH001
+  code      String // KH001 (Unique per Tenant)
   name      String
-  phone     String   @unique
+  phone     String // (Unique per Tenant)
   email     String?
   address   String?
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   sales          Sale[]
   serviceTickets ServiceTicket[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, phone])
 }
 
 // ============================================
 // CATEGORIES & PRODUCTS
 // ============================================
 model Category {
-  id       String    @id @default(cuid())
-  name     String
-  slug     String    @unique
-  type     String // laptop | phone | accessory | service
-  products Product[]
+  id        String    @id @default(cuid())
+  name      String
+  slug      String
+  type      String // laptop | phone | accessory | service
+  skuPrefix String    @default("") // LT, DT, PK, DV
+  icon      String    @default("") // lucide icon name: laptop, smartphone, wrench, headphones, etc.
+  products  Product[]
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
 }
 
 model Product {
   id          String   @id @default(cuid())
-  sku         String   @unique
+  sku         String // Unique per Tenant
   name        String
   brand       String? // Apple, Dell, Samsung...
   description String?
@@ -112,9 +236,15 @@ model Product {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  saleItems    SaleItem[]
-  serviceItems ServiceItem[]
-  movements    StockMovement[]
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  saleItems     SaleItem[]
+  serviceItems  ServiceItem[]
+  movements     StockMovement[]
+  productStocks ProductBranchStock[]
+
+  @@unique([tenantId, sku])
 }
 
 // ============================================
@@ -122,20 +252,26 @@ model Product {
 // ============================================
 model StockMovement {
   id        String   @id @default(cuid())
-  type      String   // in | out | adjust
-  quantity  Int      // delta — positive for in, negative for out, signed for adjust
-  before    Int      // stock before
-  after     Int      // stock after
+  type      String // in | out | adjust
+  quantity  Int // delta — positive for in, negative for out, signed for adjust
+  before    Int // stock before
+  after     Int // stock after
   unitCost  Float    @default(0) // for "in" — giá nhập
-  reason    String?  // mua hàng / xuất sửa chữa / kiểm kê thiếu...
-  reference String?  // mã NCC / mã phiếu liên quan
+  reason    String? // mua hàng / xuất sửa chữa / kiểm kê thiếu...
+  reference String? // mã NCC / mã phiếu liên quan
   createdAt DateTime @default(now())
 
   productId String
-  product   Product  @relation(fields: [productId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   @@index([productId, createdAt])
 }
@@ -145,7 +281,7 @@ model StockMovement {
 // ============================================
 model Sale {
   id            String   @id @default(cuid())
-  code          String   @unique // HD20240001
+  code          String // HD20240001 (Unique per Tenant)
   subtotal      Float    @default(0)
   discount      Float    @default(0)
   tax           Float    @default(0)
@@ -163,7 +299,15 @@ model Sale {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
   items SaleItem[]
+
+  @@unique([tenantId, code])
 }
 
 model SaleItem {
@@ -187,7 +331,7 @@ model SaleItem {
 // ============================================
 model ServiceTicket {
   id            String    @id @default(cuid())
-  code          String    @unique // SC20240001
+  code          String // SC20240001 (Unique per Tenant)
   deviceType    String // laptop | phone | tablet | other
   deviceBrand   String? // Apple, Dell...
   deviceModel   String? // MacBook Pro 14, iPhone 15...
@@ -202,7 +346,7 @@ model ServiceTicket {
   deposit       Float     @default(0) // cọc
   paid          Float     @default(0)
   warranty      Int       @default(0) // months on repair
-  paymentMethod String?   // cash | transfer
+  paymentMethod String? // cash | transfer
   status        String    @default("received") // received | diagnosing | waiting_parts | repairing | completed | delivered | cancelled
   receivedAt    DateTime  @default(now())
   promisedAt    DateTime? // hẹn trả
@@ -221,8 +365,16 @@ model ServiceTicket {
   assignedToId String?
   assignedTo   User?   @relation("AssignedTo", fields: [assignedToId], references: [id])
 
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
   items   ServiceItem[]
   history ServiceStatusHistory[]
+
+  @@unique([tenantId, code])
 }
 
 model ServiceItem {
@@ -247,4 +399,32 @@ model ServiceStatusHistory {
 
   ticketId String
   ticket   ServiceTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// PRINT TEMPLATES
+// ============================================
+model PrintTemplate {
+  id        String   @id @default(cuid())
+  name      String // "Hóa đơn bán hàng", "Phiếu nhận máy", "Phiếu trả máy"
+  slug      String // "sale-receipt", "service-intake", "service-return" (Unique per Tenant)
+  content   String? // Full template layout
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+}
+// ============================================
+// SYSTEM SETTINGS (Global Admin)
+// ============================================
+model SystemSetting {
+  id              String   @id @default("global")
+  platformName    String   @default("MyPOS SaaS")
+  supportEmail    String   @default("support@mypos.vn")
+  maintenanceMode Boolean  @default(false)
+  allowSignup     Boolean  @default(true)
+  announcement    String?  // Global announcement text
+  updatedAt       DateTime @updatedAt
 }

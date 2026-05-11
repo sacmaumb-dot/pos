@@ -40,9 +40,10 @@ type Product = {
   price: number;
   stock: number;
   categoryType: string;
+  categoryIcon: string;
   categoryId: string;
 };
-type Category = { id: string; name: string; type: string };
+type Category = { id: string; name: string; type: string; icon: string };
 type Customer = { id: string; name: string; phone: string; code: string };
 type Technician = { id: string; name: string };
 
@@ -69,7 +70,37 @@ export function WorkspaceClient({
     { id: "tab-default", type: "sale", label: "Đơn 1" },
   ]);
   const [activeId, setActiveId] = useState<string>("tab-default");
+  const [isMounted, setIsMounted] = useState(false);
   const [openAdd, setOpenAdd] = useState(false);
+  const [dirtyTabs, setDirtyTabs] = useState<Record<string, boolean>>({});
+
+  // Load tabs from localStorage on mount
+  useEffect(() => {
+    setIsMounted(true);
+    const savedTabs = localStorage.getItem("pos_tabs");
+    const savedActiveId = localStorage.getItem("pos_active_id");
+    if (savedTabs) {
+      try {
+        const parsed = JSON.parse(savedTabs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTabs(parsed);
+        }
+      } catch (e) {
+        console.error("Failed to restore tabs", e);
+      }
+    }
+    if (savedActiveId) {
+      setActiveId(savedActiveId);
+    }
+  }, []);
+
+  // Save tabs to localStorage
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem("pos_tabs", JSON.stringify(tabs));
+      localStorage.setItem("pos_active_id", activeId);
+    }
+  }, [tabs, activeId, isMounted]);
 
   function addTab(type: "sale" | "service") {
     const sameType = tabs.filter((t) => t.type === type).length;
@@ -91,7 +122,6 @@ export function WorkspaceClient({
     }
     const id = nextId();
     setTabs((curr) => {
-      // guard against duplicate from concurrent calls / strict-mode double-invoke
       if (curr.some((t) => t.type === "ticket" && t.ticketId === ticketId)) {
         return curr;
       }
@@ -101,19 +131,31 @@ export function WorkspaceClient({
   }
 
   useEffect(() => {
+    if (!isMounted) return;
     const ticketId = searchParams.get("ticket");
     const ticketCode = searchParams.get("code");
     if (ticketId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       openTicketTab(ticketId, ticketCode || "Phiếu");
       const url = new URL(window.location.href);
       url.searchParams.delete("ticket");
       url.searchParams.delete("code");
       window.history.replaceState({}, "", url.toString());
     }
-  }, [searchParams]);
+  }, [searchParams, isMounted]);
 
   function closeTab(id: string) {
+    if (dirtyTabs[id]) {
+      const confirmClose = window.confirm(
+        "Bạn có các thay đổi chưa được lưu trên phiếu này. Bạn có chắc chắn muốn đóng tab này không?"
+      );
+      if (!confirmClose) return;
+    }
+    setDirtyTabs((curr) => {
+      const next = { ...curr };
+      delete next[id];
+      return next;
+    });
+
     setTabs((curr) => {
       const idx = curr.findIndex((t) => t.id === id);
       if (idx === -1) return curr;
@@ -133,57 +175,57 @@ export function WorkspaceClient({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-1 border-b overflow-x-auto flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="space-y-4">
+      <div className="bg-card/65 backdrop-blur-sm border border-border/80 rounded-2xl p-1.5 shadow-sm flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveId(tab.id)}
-            className={cn(
-              "group flex items-center gap-2 px-3 py-2 text-sm border-b-2 -mb-px shrink-0 transition-colors",
-              activeId === tab.id
-                ? "border-primary text-primary font-medium bg-primary/5"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50",
-            )}
-          >
-            {tab.type === "sale" ? (
-              <ShoppingCart className="size-3.5" />
-            ) : tab.type === "service" ? (
-              <Wrench className="size-3.5" />
-            ) : (
-              <ClipboardList className="size-3.5" />
-            )}
-            <span>{tab.label}</span>
-            <span
-              role="button"
-              tabIndex={0}
+          <div key={tab.id} className="relative flex-shrink-0 group">
+            <button
+              type="button"
+              onClick={() => setActiveId(tab.id)}
+              className={cn(
+                "flex items-center gap-2 px-4 h-9 rounded-xl text-xs font-bold transition-all duration-200 pr-10",
+                activeId === tab.id
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              )}
+            >
+              {tab.type === "sale" ? (
+                <ShoppingCart className="size-3.5" />
+              ) : tab.type === "service" ? (
+                <Wrench className="size-3.5" />
+              ) : (
+                <ClipboardList className="size-3.5" />
+              )}
+              <span>{tab.label}</span>
+            </button>
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 closeTab(tab.id);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  closeTab(tab.id);
-                }
-              }}
-              className="size-4 rounded grid place-items-center hover:bg-muted text-muted-foreground hover:text-destructive cursor-pointer"
+              className={cn(
+                "absolute right-2 top-1/2 -translate-y-1/2 size-6 rounded-lg flex items-center justify-center transition-all",
+                activeId === tab.id
+                  ? "bg-white/20 text-white hover:bg-white/30"
+                  : "bg-transparent text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
+              )}
               aria-label="Đóng tab"
             >
               <X className="size-3" />
-            </span>
-          </button>
+            </button>
+          </div>
         ))}
+        <div className="h-6 w-px bg-border/60 mx-1" />
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="ml-1 h-8 gap-1"
+          className="h-9 px-4 rounded-xl gap-2 font-bold hover:bg-primary/10 hover:text-primary transition-all shrink-0"
           onClick={() => setOpenAdd(true)}
         >
           <Plus className="size-4" />
-          <span className="hidden sm:inline">Tab mới</span>
+          <span>Tab mới</span>
         </Button>
       </div>
 
@@ -219,6 +261,13 @@ export function WorkspaceClient({
               technicians={technicians}
               products={products}
               onClosed={() => closeTab(tab.id)}
+              isActive={activeId === tab.id}
+              setDirty={(dirty) => {
+                setDirtyTabs((curr) => {
+                  if (curr[tab.id] === dirty) return curr;
+                  return { ...curr, [tab.id]: dirty };
+                });
+              }}
             />
           )}
         </div>

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Receipt,
   Search,
+  AlertTriangle,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -56,12 +57,14 @@ export function AppHeader({
   shopName,
   shopTagline,
   logoUrl,
+  trialDaysLeft,
 }: {
   user: SessionUser;
   pendingTickets: PendingTicket[];
   shopName: string;
   shopTagline: string;
   logoUrl: string | null;
+  trialDaysLeft: number | null;
 }) {
   const [pendingQ, setPendingQ] = useState("");
   const filteredPending = useMemo(() => {
@@ -77,7 +80,7 @@ export function AppHeader({
   }, [pendingTickets, pendingQ]);
 
   const navData = [
-    { title: "Tổng quan", url: "/", icon: LayoutDashboard },
+    { title: "Tổng quan", url: "/dashboard", icon: LayoutDashboard },
     { title: "Hoá đơn bán hàng", url: "/sales", icon: Receipt },
     { title: "Phiếu sửa chữa", url: "/service", icon: Wrench },
     { title: "Sản phẩm / Kho", url: "/products", icon: Package },
@@ -127,6 +130,18 @@ export function AppHeader({
       </Link>
 
       <div className="flex-1" />
+
+      {trialDaysLeft !== null && trialDaysLeft <= 3 && (
+        <Link 
+          href="/settings/subscription" 
+          className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all mr-2 group"
+        >
+          <AlertTriangle className="size-3.5 group-hover:scale-110 transition-transform" />
+          <span className="text-[11px] font-bold">
+            Dùng thử còn {trialDaysLeft} ngày. Nâng cấp ngay!
+          </span>
+        </Link>
+      )}
 
       <GlobalSearch />
 
@@ -202,9 +217,9 @@ export function AppHeader({
       </DropdownMenu>
 
       <DropdownMenu>
-        <DropdownMenuTrigger className="inline-flex items-center gap-2 h-9 px-2 rounded-md hover:bg-muted">
-          <Avatar className="size-7 shrink-0">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+        <DropdownMenuTrigger className="inline-flex items-center gap-2 h-9 px-2 rounded-md hover:bg-muted/80 transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
+          <Avatar className="size-7 shrink-0 border border-border">
+            <AvatarFallback className="bg-gradient-to-tr from-primary to-blue-600 text-primary-foreground text-xs font-semibold">
               {user.name
                 .split(" ")
                 .map((s) => s[0])
@@ -212,49 +227,69 @@ export function AppHeader({
                 .join("")}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden md:flex flex-col text-left text-xs leading-tight">
-            <span className="font-medium truncate max-w-[140px]">
+          <div className="hidden md:flex flex-col text-left text-[11px] leading-tight">
+            <span className="font-semibold text-foreground truncate max-w-[140px]">
               {user.name}
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground text-[10px]">
               {roleLabel(user.role)}
             </span>
           </div>
-          <ChevronDown className="size-3.5 text-muted-foreground hidden md:inline" />
+          <ChevronDown className="size-3 text-muted-foreground hidden md:inline transition-transform duration-200" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <div className="px-2 py-1.5">
-            <div className="flex flex-col">
-              <span className="font-medium text-sm">{user.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {user.email}
-              </span>
+        <DropdownMenuContent align="end" className="w-64 p-1.5 rounded-xl border border-border shadow-xl bg-popover/98 backdrop-blur-md">
+          {/* Elegant User Profile Banner */}
+          <div className="px-3 py-3 mb-1 rounded-lg bg-gradient-to-br from-primary/10 via-blue-500/5 to-transparent border border-primary/10">
+            <div className="flex items-center gap-3">
+              <Avatar className="size-10 border-2 border-background shadow-md">
+                <AvatarFallback className="bg-gradient-to-tr from-primary to-blue-600 text-white text-sm font-bold">
+                  {user.name
+                    .split(" ")
+                    .map((s) => s[0])
+                    .slice(-2)
+                    .join("")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-sm text-foreground truncate">{user.name}</span>
+                <span className="text-[11px] text-muted-foreground truncate">{user.email}</span>
+                <span className="inline-flex items-center mt-1 w-fit px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-primary/20 text-primary dark:bg-primary/30">
+                  {roleLabel(user.role)}
+                </span>
+              </div>
             </div>
           </div>
-          <DropdownMenuSeparator />
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-            Quản lý
+          <DropdownMenuSeparator className="mx-1 bg-border/60" />
+          
+          <div className="px-2.5 py-1 text-[9px] uppercase tracking-wider text-muted-foreground/80 font-bold">
+            Hệ thống quản trị
           </div>
-          {navData.map((item) => (
-            <DropdownMenuItem
-              key={item.url}
-              render={<Link href={item.url} />}
-              className="gap-2"
-            >
-              <item.icon className="size-4" />
-              <span>{item.title}</span>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
+          <div className="space-y-0.5 max-h-72 overflow-y-auto pr-1">
+            {navData.map((item) => (
+              <DropdownMenuItem
+                key={item.url}
+                render={<Link href={item.url} />}
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer hover:bg-accent/60 hover:text-accent-foreground text-xs font-medium transition-colors duration-150 group"
+              >
+                <div className="p-1 rounded-md bg-muted/40 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                  <item.icon className="size-3.5" />
+                </div>
+                <span>{item.title}</span>
+              </DropdownMenuItem>
+            ))}
+          </div>
+          <DropdownMenuSeparator className="mx-1 bg-border/60" />
           <DropdownMenuItem
-            render={<form action={logoutAction} />}
+            render={<form action={logoutAction} className="w-full" />}
             className="p-0"
           >
             <button
               type="submit"
-              className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
+              className="flex w-full items-center gap-2.5 px-2.5 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/15 rounded-lg transition-colors"
             >
-              <LogOut className="size-4" />
+              <div className="p-1 rounded-md bg-red-500/5 group-hover:bg-red-500/10">
+                <LogOut className="size-3.5" />
+              </div>
               Đăng xuất
             </button>
           </DropdownMenuItem>

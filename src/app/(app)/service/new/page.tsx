@@ -1,14 +1,14 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { ServiceForm } from "../service-form";
 
 export default async function NewServicePage() {
   const [customers, technicians, products] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { name: "asc" }, take: 500 }),
-    prisma.user.findMany({
+    (await getTenantPrismaServer()).customer.findMany({ orderBy: { name: "asc" }, take: 500 }),
+    (await getTenantPrismaServer()).user.findMany({
       where: { active: true, role: { in: ["technician", "admin"] } },
       orderBy: { name: "asc" },
     }),
-    prisma.product.findMany({
+    (await getTenantPrismaServer()).product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       include: { category: true },

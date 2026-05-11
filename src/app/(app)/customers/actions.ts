@@ -1,8 +1,10 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { getPlan } from "@/lib/plans";
+import { getTenantFromHeader } from "@/lib/settings";
 
 export async function createCustomer(data: {
   name: string;
@@ -12,10 +14,21 @@ export async function createCustomer(data: {
   note?: string;
 }) {
   try {
-    await requireSession();
-    const count = await prisma.customer.count();
+    const session = await requireSession();
+    const tenantPrisma = await getTenantPrismaServer();
+    const tenant = await getTenantFromHeader();
+    
+    if (tenant) {
+      const plan = getPlan(tenant.subscriptionPlan);
+      const count = await tenantPrisma.customer.count();
+      if (count >= plan.maxCustomers) {
+        return { ok: false as const, error: `Gói ${plan.name} giới hạn tối đa ${plan.maxCustomers} khách hàng. Vui lòng nâng cấp!` };
+      }
+    }
+
+    const count = await tenantPrisma.customer.count();
     const code = `KH${String(count + 1).padStart(5, "0")}`;
-    await prisma.customer.create({
+    await (await getTenantPrismaServer()).customer.create({
       data: {
         code,
         name: data.name,
@@ -23,6 +36,7 @@ export async function createCustomer(data: {
         email: data.email || null,
         address: data.address || null,
         note: data.note || null,
+        tenantId: session.tenantId,
       },
     });
     revalidatePath("/customers");
@@ -49,7 +63,7 @@ export async function updateCustomer(
 ) {
   try {
     await requireSession();
-    await prisma.customer.update({
+    await (await getTenantPrismaServer()).customer.update({
       where: { id },
       data: {
         name: data.name,
@@ -75,7 +89,7 @@ export async function updateCustomer(
 export async function deleteCustomer(id: string) {
   try {
     await requireSession();
-    const used = await prisma.customer.findUnique({
+    const used = await (await getTenantPrismaServer()).customer.findUnique({
       where: { id },
       include: {
         sales: { select: { id: true }, take: 1 },
@@ -89,7 +103,7 @@ export async function deleteCustomer(id: string) {
         error: "Khách hàng đã có giao dịch, không thể xoá",
       };
     }
-    await prisma.customer.delete({ where: { id } });
+    await (await getTenantPrismaServer()).customer.delete({ where: { id } });
     revalidatePath("/customers");
     return { ok: true as const };
   } catch (e) {

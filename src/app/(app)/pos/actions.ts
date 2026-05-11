@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -39,20 +39,21 @@ export async function createSale(input: {
       if (!phone) {
         return { ok: false as const, error: "SĐT khách hàng không hợp lệ" };
       }
-      const existing = await prisma.customer.findFirst({ where: { phone } });
+      const existing = await (await getTenantPrismaServer()).customer.findFirst({ where: { phone } });
       if (existing) {
         resolvedCustomerId = existing.id;
       } else {
-        const allCust = await prisma.customer.findMany({ select: { code: true } });
+        const allCust = await (await getTenantPrismaServer()).customer.findMany({ select: { code: true } });
         const maxCustNum = allCust.reduce((m, c) => {
           const n = parseInt(c.code.replace(/\D/g, "")) || 0;
           return n > m ? n : m;
         }, 0);
-        const created = await prisma.customer.create({
+        const created = await (await getTenantPrismaServer()).customer.create({
           data: {
             code: `KH${String(maxCustNum + 1).padStart(5, "0")}`,
             name,
             phone,
+            tenantId: session.tenantId,
           },
         });
         resolvedCustomerId = created.id;
@@ -61,7 +62,7 @@ export async function createSale(input: {
 
     // Validate stock
     const productIds = input.items.map((i) => i.productId);
-    const products = await prisma.product.findMany({
+    const products = await (await getTenantPrismaServer()).product.findMany({
       where: { id: { in: productIds } },
       include: { category: true },
     });
@@ -83,14 +84,14 @@ export async function createSale(input: {
     const total = Math.max(0, subtotal - (input.discount || 0));
 
     // Generate code
-    const allSales = await prisma.sale.findMany({ select: { code: true } });
+    const allSales = await (await getTenantPrismaServer()).sale.findMany({ select: { code: true } });
     const maxNum = allSales.reduce((m, s) => {
       const n = parseInt(s.code.replace(/\D/g, "")) || 0;
       return n > m ? n : m;
     }, 0);
     const code = `HD${String(maxNum + 1).padStart(5, "0")}`;
 
-    const sale = await prisma.$transaction(async (tx) => {
+    const sale = await (await getTenantPrismaServer()).$transaction(async (tx) => {
       const created = await tx.sale.create({
         data: {
           code,
@@ -103,6 +104,7 @@ export async function createSale(input: {
           note: input.note || null,
           customerId: resolvedCustomerId,
           userId: session.id,
+          tenantId: session.tenantId,
           items: {
             create: input.items.map((i) => ({
               productId: i.productId,

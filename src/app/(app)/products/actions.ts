@@ -1,11 +1,28 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { getPlan } from "@/lib/plans";
+import { getTenantFromHeader } from "@/lib/settings";
+
+async function generateSku(tenantPrisma: any, categoryId: string): Promise<string> {
+  // Get the category to find its skuPrefix
+  const category = await tenantPrisma.category.findUnique({
+    where: { id: categoryId },
+  });
+  const prefix = category?.skuPrefix || "SP";
+
+  // Count existing products in this category to determine next number
+  const count = await tenantPrisma.product.count({
+    where: { categoryId },
+  });
+  const nextNum = count + 1;
+  return `${prefix}${String(nextNum).padStart(4, "0")}`;
+}
 
 export async function createProduct(data: {
-  sku: string;
+  sku?: string;
   name: string;
   brand?: string;
   categoryId: string;
@@ -16,10 +33,27 @@ export async function createProduct(data: {
   description?: string;
 }) {
   try {
-    await requireSession();
-    await prisma.product.create({
+    const session = await requireSession();
+    const tenantPrisma = await getTenantPrismaServer();
+    const tenant = await getTenantFromHeader();
+    
+    if (tenant) {
+      const plan = getPlan(tenant.subscriptionPlan);
+      const count = await tenantPrisma.product.count();
+      if (count >= plan.maxProducts) {
+        return { ok: false as const, error: `Gói ${plan.name} giới hạn tối đa ${plan.maxProducts} sản phẩm. Vui lòng nâng cấp!` };
+      }
+    }
+
+    // Auto-generate SKU if not provided
+    let sku = data.sku?.trim();
+    if (!sku) {
+      sku = await generateSku(tenantPrisma, data.categoryId);
+    }
+
+    await tenantPrisma.product.create({
       data: {
-        sku: data.sku,
+        sku,
         name: data.name,
         brand: data.brand || null,
         categoryId: data.categoryId,
@@ -28,6 +62,7 @@ export async function createProduct(data: {
         stock: data.stock,
         warranty: data.warranty,
         description: data.description || null,
+        tenantId: session.tenantId,
       },
     });
     revalidatePath("/products");
@@ -59,7 +94,7 @@ export async function updateProduct(
 ) {
   try {
     await requireSession();
-    await prisma.product.update({
+    await (await getTenantPrismaServer()).product.update({
       where: { id },
       data: {
         sku: data.sku,
@@ -89,7 +124,7 @@ export async function updateProduct(
 export async function deleteProduct(id: string) {
   try {
     await requireSession();
-    await prisma.product.update({
+    await (await getTenantPrismaServer()).product.update({
       where: { id },
       data: { isActive: false },
     });

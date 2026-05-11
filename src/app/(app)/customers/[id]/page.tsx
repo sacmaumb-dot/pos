@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getTenantPrismaServer } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -38,7 +38,7 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = await prisma.customer.findUnique({
+  const customer = await (await getTenantPrismaServer()).customer.findUnique({
     where: { id },
     include: {
       sales: {

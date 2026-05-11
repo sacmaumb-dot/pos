@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useRef } from "react";
 import {
   Loader2,
   Printer,
@@ -73,11 +73,15 @@ export function TicketTab({
   technicians,
   products,
   onClosed,
+  isActive,
+  setDirty,
 }: {
   ticketId: string;
   technicians: Technician[];
   products: Product[];
   onClosed: () => void;
+  isActive?: boolean;
+  setDirty?: (dirty: boolean) => void;
 }) {
   const closeRef = onClosed;
   const [data, setData] = useState<TicketData | null>(null);
@@ -85,15 +89,18 @@ export function TicketTab({
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
+  const hasLoadedRef = useRef(false);
+
   useEffect(() => {
+    if (!isActive && hasLoadedRef.current) return;
     let alive = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     getTicketForTab(ticketId).then((res) => {
       if (!alive) return;
       if (res.ok) {
         setData(res.ticket);
         setError(null);
+        hasLoadedRef.current = true;
       } else {
         setError(res.error || "Không tải được phiếu");
       }
@@ -102,7 +109,7 @@ export function TicketTab({
     return () => {
       alive = false;
     };
-  }, [ticketId, version]);
+  }, [ticketId, version, isActive]);
 
   useEffect(() => {
     if (data && data.status === "delivered") {
@@ -111,7 +118,8 @@ export function TicketTab({
     }
   }, [data, onClosed]);
 
-  if (loading) {
+  if (loading || !data) {
+    if (!isActive) return null;
     return (
       <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
         <Loader2 className="size-5 animate-spin" />
@@ -119,7 +127,7 @@ export function TicketTab({
       </div>
     );
   }
-  if (error || !data) {
+  if (error) {
     return (
       <div className="rounded-md border border-destructive/30 bg-destructive/5 p-6 text-center text-sm text-destructive">
         {error || "Không tải được phiếu"}
@@ -135,6 +143,7 @@ export function TicketTab({
       products={products}
       onReload={() => setVersion((v) => v + 1)}
       onClosed={closeRef}
+      setDirty={setDirty}
     />
   );
 }
@@ -145,12 +154,14 @@ function TicketTabInner({
   products,
   onReload,
   onClosed,
+  setDirty,
 }: {
   ticket: TicketData;
   technicians: Technician[];
   products: Product[];
   onReload: () => void;
   onClosed: () => void;
+  setDirty?: (dirty: boolean) => void;
 }) {
   const isDelivered = ticket.status === "delivered";
   const [pending, startTransition] = useTransition();
@@ -172,6 +183,34 @@ function TicketTabInner({
     assignedToId: ticket.assignedToId || "",
     note: ticket.note || "",
   });
+
+  const hasChanges =
+    form.customerName !== ticket.customer.name ||
+    form.customerPhone !== ticket.customer.phone ||
+    form.deviceType !== ticket.deviceType ||
+    form.deviceBrand !== (ticket.deviceBrand || "") ||
+    form.deviceModel !== (ticket.deviceModel || "") ||
+    form.imei !== (ticket.imei || "") ||
+    form.accessories !== (ticket.accessories || "") ||
+    form.appearance !== (ticket.appearance || "") ||
+    form.problem !== ticket.problem ||
+    Number(form.deposit) !== (ticket.deposit || 0) ||
+    Number(form.warranty) !== (ticket.warranty || 0) ||
+    form.promisedAt !== (ticket.promisedAt || "") ||
+    form.assignedToId !== (ticket.assignedToId || "") ||
+    form.note !== (ticket.note || "");
+
+  const setDirtyRef = useRef(setDirty);
+  useEffect(() => {
+    setDirtyRef.current = setDirty;
+  }, [setDirty]);
+
+  useEffect(() => {
+    setDirtyRef.current?.(hasChanges);
+    return () => {
+      setDirtyRef.current?.(false);
+    };
+  }, [hasChanges]);
 
   function set<K extends keyof typeof form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
