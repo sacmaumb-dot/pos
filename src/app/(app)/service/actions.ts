@@ -126,6 +126,7 @@ export async function createServiceTicket(input: {
       input.device.type;
     if (input.assignedToId && input.assignedToId !== session.id) {
       await createNotification({
+        tenantId: session.tenantId,
         userId: input.assignedToId,
         type: "ticket_assigned",
         title: `Bạn được giao phiếu ${ticket.code}`,
@@ -134,6 +135,7 @@ export async function createServiceTicket(input: {
       });
     }
     await notifyAdmins({
+      tenantId: session.tenantId,
       type: "ticket_created",
       title: `Phiếu mới ${ticket.code}`,
       body: `${customer?.name ?? ""} · ${deviceLabel}`,
@@ -186,6 +188,7 @@ export async function updateServiceStatus(
         targets.add(ticket.createdById);
       for (const userId of targets) {
         await createNotification({
+          tenantId: session.tenantId,
           userId,
           type: "ticket_status",
           title: `${ticket.code} → ${label}`,
@@ -266,6 +269,7 @@ export async function updateServiceTicket(
         [before.deviceBrand, before.deviceModel].filter(Boolean).join(" ") ||
         before.deviceType;
       await createNotification({
+        tenantId: session.tenantId,
         userId: assignedToId,
         type: "ticket_assigned",
         title: `Bạn được giao phiếu ${before.code}`,
