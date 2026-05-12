@@ -1,15 +1,27 @@
 import React from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import SignupForm from "./signup-form";
 import { Laptop, Smartphone, Wrench, ArrowLeft } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = {
   title: "Đăng ký dùng thử MyPOS - Quản lý cửa hàng Laptop & Điện thoại",
   description: "Trải nghiệm 7 ngày dùng thử miễn phí đầy đủ tính năng quản lý bán hàng và sửa chữa chuyên nghiệp.",
 };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  // Respect SystemSetting.allowSignup at render time, in addition to the
+  // server-action check in actions.ts. This prevents the form from even
+  // being shown when signup is disabled, but the action enforces it again
+  // on submit (defense in depth) since the form is reachable directly.
+  const systemSetting = await prisma.systemSetting.findUnique({
+    where: { id: "global" },
+  });
+  if (systemSetting && systemSetting.allowSignup === false) {
+    redirect("/login");
+  }
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Left panel - branding */}
