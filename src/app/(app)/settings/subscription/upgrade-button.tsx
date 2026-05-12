@@ -125,7 +125,7 @@ export function UpgradeButton({ plan, label, currentPlan }: { plan: string, labe
           <div className="p-4 rounded-2xl bg-slate-50 border space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-sm font-bold">Thời hạn đăng ký</label>
-              <Select value={months} onValueChange={setMonths}>
+              <Select value={months} onValueChange={(v) => setMonths(v ?? "1")}>
                 <SelectTrigger className="w-[140px] rounded-xl bg-white">
                   <SelectValue placeholder="Chọn thời hạn" />
                 </SelectTrigger>

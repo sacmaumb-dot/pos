@@ -1,3 +1,9 @@
+"use server";
+
+import { getTenantPrismaServer } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+
 const DEFAULT_TEMPLATES = [
   {
     slug: "sale-receipt",

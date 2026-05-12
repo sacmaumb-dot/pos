@@ -19,6 +19,7 @@ type Category = {
   name: string;
   type: string;
   skuPrefix: string;
+  icon: string;
 };
 
 export function CategoryActions({ category }: { category: Category }) {

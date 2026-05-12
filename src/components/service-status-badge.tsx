@@ -39,10 +39,16 @@ const STATUS_MAP: Record<
   },
 };
 
-export function ServiceStatusBadge({ status }: { status: string }) {
+export function ServiceStatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
   const s = STATUS_MAP[status] || { label: status, className: "" };
   return (
-    <Badge variant="outline" className={cn("border", s.className)}>
+    <Badge variant="outline" className={cn("border", s.className, className)}>
       {s.label}
     </Badge>
   );

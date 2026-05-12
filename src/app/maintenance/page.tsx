@@ -21,9 +21,10 @@ export default function MaintenancePage() {
         </div>
 
         <div className="pt-8">
-          <Button asChild className="rounded-2xl font-black px-8 py-6 h-auto">
-            <Link href="/">Quay lại trang chủ</Link>
-          </Button>
+          <Button
+            render={<Link href="/">Quay lại trang chủ</Link>}
+            className="rounded-2xl font-black px-8 py-6 h-auto"
+          />
         </div>
         
         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
