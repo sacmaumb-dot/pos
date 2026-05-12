@@ -12,8 +12,6 @@ async function requireAdmin() {
   return s;
 }
 
-const SETTING_ID = "singleton";
-
 export async function updateSettings(data: {
   shopName: string;
   siteTitle: string;
@@ -30,41 +28,36 @@ export async function updateSettings(data: {
     if (!(await requireAdmin())) {
       return { ok: false as const, error: "Không có quyền" };
     }
-    const existing = await (await getTenantPrismaServer()).$queryRawUnsafe<any[]>(
-      "SELECT id FROM AppSetting WHERE id = 'singleton'"
-    );
-    if (existing && existing.length > 0) {
-      await (await getTenantPrismaServer()).$executeRawUnsafe(
-        `UPDATE AppSetting 
-         SET shopName = ?, siteTitle = ?, shopTagline = ?, shopAddress = ?, shopPhone = ?, shopEmail = ?, printSize = ?, bankId = ?, bankAccount = ?, bankAccountName = ?
-         WHERE id = 'singleton'`,
-        data.shopName,
-        data.siteTitle,
-        data.shopTagline,
-        data.shopAddress || null,
-        data.shopPhone || null,
-        data.shopEmail || null,
-        data.printSize,
-        data.bankId || null,
-        data.bankAccount || null,
-        data.bankAccountName || null
-      );
+    const session = (await getSession())!;
+    const tp = await getTenantPrismaServer();
+    const payload = {
+      shopName: data.shopName,
+      siteTitle: data.siteTitle,
+      shopTagline: data.shopTagline,
+      shopAddress: data.shopAddress || null,
+      shopPhone: data.shopPhone || null,
+      shopEmail: data.shopEmail || null,
+      printSize: data.printSize,
+      bankId: data.bankId || null,
+      bankAccount: data.bankAccount || null,
+      bankAccountName: data.bankAccountName || null,
+    };
+
+    // AppSetting has no @@unique([tenantId]) constraint, so we cannot use
+    // upsert with a tenantId-only where. Use findFirst (tenant-scoped via
+    // the extension) and then update-or-create.
+    const existing = await tp.appSetting.findFirst({ select: { id: true } });
+    if (existing) {
+      await tp.appSetting.update({
+        where: { id: existing.id },
+        data: payload,
+      });
     } else {
-      await (await getTenantPrismaServer()).$executeRawUnsafe(
-        `INSERT INTO AppSetting (id, shopName, siteTitle, shopTagline, shopAddress, shopPhone, shopEmail, printSize, bankId, bankAccount, bankAccountName, updatedAt)
-         VALUES ('singleton', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-        data.shopName,
-        data.siteTitle,
-        data.shopTagline,
-        data.shopAddress || null,
-        data.shopPhone || null,
-        data.shopEmail || null,
-        data.printSize,
-        data.bankId || null,
-        data.bankAccount || null,
-        data.bankAccountName || null
-      );
+      await tp.appSetting.create({
+        data: { ...payload, tenantId: session.tenantId },
+      });
     }
+
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const };
@@ -84,6 +77,9 @@ export async function uploadAsset(formData: FormData) {
     if (!file || !kind) {
       return { ok: false as const, error: "Thiếu file" };
     }
+    if (kind !== "logo" && kind !== "favicon") {
+      return { ok: false as const, error: "Loại file không hợp lệ" };
+    }
     if (file.size > 2 * 1024 * 1024) {
       return { ok: false as const, error: "File tối đa 2MB" };
     }
@@ -98,27 +94,22 @@ export async function uploadAsset(formData: FormData) {
     const buf = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buf);
     const url = `/uploads/${fileName}`;
-    const adminS = await getSession();
-    const tenantId = adminS?.tenantId || "singleton";
 
-    const existing = await (await getTenantPrismaServer()).$queryRawUnsafe<any[]>(
-      "SELECT id FROM AppSetting WHERE tenantId = ?",
-      tenantId
-    );
-    if (existing && existing.length > 0) {
-      await (await getTenantPrismaServer()).$executeRawUnsafe(
-        `UPDATE AppSetting SET ${kind === "favicon" ? "faviconUrl" : "logoUrl"} = ? WHERE tenantId = ?`,
-        url,
-        tenantId
-      );
+    const session = (await getSession())!;
+    const tp = await getTenantPrismaServer();
+    const field = kind === "favicon" ? "faviconUrl" : "logoUrl";
+    const existing = await tp.appSetting.findFirst({ select: { id: true } });
+    if (existing) {
+      await tp.appSetting.update({
+        where: { id: existing.id },
+        data: { [field]: url },
+      });
     } else {
-      await (await getTenantPrismaServer()).$executeRawUnsafe(
-        `INSERT INTO AppSetting (id, ${kind === "favicon" ? "faviconUrl" : "logoUrl"}, tenantId, updatedAt) VALUES (?, ?, ?, datetime('now'))`,
-        Math.random().toString(),
-        url,
-        tenantId
-      );
+      await tp.appSetting.create({
+        data: { [field]: url, tenantId: session.tenantId },
+      });
     }
+
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const, url };
@@ -133,13 +124,18 @@ export async function clearAsset(kind: "logo" | "favicon") {
     if (!(await requireAdmin())) {
       return { ok: false as const, error: "Không có quyền" };
     }
-    const adminS = await getSession();
-    const tenantId = adminS?.tenantId || "singleton";
-
-    await (await getTenantPrismaServer()).$executeRawUnsafe(
-      `UPDATE AppSetting SET ${kind === "favicon" ? "faviconUrl" : "logoUrl"} = NULL WHERE tenantId = ?`,
-      tenantId
-    );
+    if (kind !== "logo" && kind !== "favicon") {
+      return { ok: false as const, error: "Loại file không hợp lệ" };
+    }
+    const tp = await getTenantPrismaServer();
+    const field = kind === "favicon" ? "faviconUrl" : "logoUrl";
+    const existing = await tp.appSetting.findFirst({ select: { id: true } });
+    if (existing) {
+      await tp.appSetting.update({
+        where: { id: existing.id },
+        data: { [field]: null },
+      });
+    }
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const };
