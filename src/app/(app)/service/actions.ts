@@ -386,7 +386,7 @@ export async function deliverService(input: {
   note: string;
 }) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
       where: { id: input.ticketId },
       include: { items: true },
@@ -413,9 +413,26 @@ export async function deliverService(input: {
         if (it.productId) {
           const p = await tx.product.findUnique({ where: { id: it.productId } });
           if (p) {
-            await tx.product.update({
+            const updated = await tx.product.update({
               where: { id: it.productId },
               data: { stock: { decrement: it.quantity } },
+            });
+            // Record the stock movement for the parts used in this service
+            // ticket so the stock-history page shows where the inventory
+            // went (was previously silently decremented).
+            await tx.stockMovement.create({
+              data: {
+                type: "out",
+                quantity: -it.quantity,
+                before: p.stock,
+                after: updated.stock,
+                unitCost: 0,
+                reason: "Xuất sửa chữa",
+                reference: ticket.code,
+                productId: it.productId,
+                userId: session.id,
+                tenantId: session.tenantId,
+              },
             });
           }
         }
