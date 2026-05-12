@@ -1,0 +1,32 @@
+# Local Postgres for development.
+#
+# Usage:
+#   docker compose up -d        # start in background
+#   docker compose down         # stop and remove the container
+#   docker compose down -v      # also delete the data volume (fresh DB)
+#
+# The default credentials match .env.example. Override with a local
+# `.env.docker` or by exporting POSTGRES_* in your shell.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saaspos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: saaspos
+    ports:
+      # Exposed on 5433 so a system Postgres on 5432 isn't shadowed.
+      - "5433:5432"
+    volumes:
+      - saaspos-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d saaspos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  saaspos-pg-data:
