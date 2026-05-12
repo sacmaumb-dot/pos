@@ -1,20 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+SaaS POS — multi-tenant POS / service-ticket / inventory app built on Next.js 16 + Prisma + Postgres.
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+
+- Node.js 20+ and npm
+- Docker (for local Postgres) — or any reachable Postgres 14+ instance
+
+### 2. Database
+
+The repo ships a `docker-compose.yml` that starts a local Postgres on port `5433`:
+
+```bash
+docker compose up -d
+```
+
+Then copy `.env.example` to `.env`. The default `DATABASE_URL` already matches the docker-compose container:
+
+```bash
+cp .env.example .env
+```
+
+If you point `DATABASE_URL` at a hosted Postgres (Supabase / Neon / Railway / RDS / …), no other change is needed.
+
+### 3. Install + migrate + seed
+
+```bash
+npm install
+npm run db:migrate           # apply prisma/migrations/* to the database
+npm run db:seed              # populate demo tenants + users
+```
+
+Seed test accounts (password for all: `admin123`):
+
+| Email | Role | Tenant |
+|---|---|---|
+| `superadmin@mypos.vn` | super-admin | (global) |
+| `admin@applecare.com` | tenant admin | `applecare` |
+| `admin@techshop.com` | tenant admin | `techshop` |
+
+### 4. Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app is multi-tenant via subdomain. In local dev:
+
+- Root / signup: <http://localhost:3000>
+- Apple Care tenant: <http://applecare.localhost:3000>
+- TechShop tenant: <http://techshop.localhost:3000>
+- Super-admin: <http://localhost:3000/admin-login>
+
+### 5. Useful scripts
+
+| Script | What it does |
+|---|---|
+| `npm run db:migrate` | Apply pending migrations (dev — uses `prisma migrate dev`). |
+| `npm run db:migrate:deploy` | Apply migrations in CI / prod (`prisma migrate deploy`). |
+| `npm run db:reset` | Drop everything and re-run migrations + seed. |
+| `npm run db:push` | Sync the schema without creating a migration (only for quick prototyping). |
+| `npm run db:seed` | Re-run `prisma/seed.ts`. |
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
