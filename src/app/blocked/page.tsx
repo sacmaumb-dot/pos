@@ -21,9 +21,11 @@ export default function BlockedPage() {
         </div>
 
         <div className="pt-8">
-          <Button asChild variant="outline" className="rounded-2xl font-black px-8 py-6 h-auto text-white border-white/20 hover:bg-white/5">
-            <Link href="/">Quay lại trang chủ</Link>
-          </Button>
+          <Button
+            render={<Link href="/">Quay lại trang chủ</Link>}
+            variant="outline"
+            className="rounded-2xl font-black px-8 py-6 h-auto text-white border-white/20 hover:bg-white/5"
+          />
         </div>
         
         <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">

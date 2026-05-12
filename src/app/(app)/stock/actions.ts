@@ -16,6 +16,7 @@ async function recordMovement(
   type: "in" | "out" | "adjust",
   input: StockInput,
   userId: string,
+  tenantId: string,
 ) {
   const product = await (await getTenantPrismaServer()).product.findUnique({
     where: { id: input.productId },
@@ -50,6 +51,7 @@ async function recordMovement(
         reference: input.reference || null,
         productId: input.productId,
         userId,
+        tenantId,
       },
     }),
   ]);
@@ -64,14 +66,14 @@ export async function stockIn(input: StockInput) {
   const session = await requireSession();
   if (!input.quantity || input.quantity <= 0)
     return { ok: false as const, error: "Số lượng phải lớn hơn 0" };
-  return recordMovement("in", input, session.id);
+  return recordMovement("in", input, session.id, session.tenantId);
 }
 
 export async function stockOut(input: StockInput) {
   const session = await requireSession();
   if (!input.quantity || input.quantity <= 0)
     return { ok: false as const, error: "Số lượng phải lớn hơn 0" };
-  return recordMovement("out", input, session.id);
+  return recordMovement("out", input, session.id, session.tenantId);
 }
 
 export async function stockAdjust(input: {
@@ -104,6 +106,7 @@ export async function stockAdjust(input: {
         reason: input.reason || "Kiểm kê",
         productId: input.productId,
         userId: session.id,
+        tenantId: session.tenantId,
       },
     }),
   ]);

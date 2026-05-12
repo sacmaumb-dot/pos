@@ -77,7 +77,7 @@ export async function updateUser(
       email: string;
       role: string;
       active: boolean;
-      branchId?: string;
+      branchId?: string | null;
       password?: string;
     } = {
       name: data.name,
