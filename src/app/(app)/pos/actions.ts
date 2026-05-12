@@ -118,13 +118,35 @@ export async function createSale(input: {
         },
       });
 
-      // Reduce stock for non-service items
+      // Reduce stock for non-service items + record a StockMovement so the
+      // stock-history page reflects the sale. We refetch each product's
+      // current stock inside the transaction so the `before` / `after`
+      // values are correct even when the same product appears in multiple
+      // cart rows.
       for (const item of input.items) {
-        const p = products.find((x) => x.id === item.productId);
-        if (p && p.category.type !== "service") {
-          await tx.product.update({
+        const cached = products.find((x) => x.id === item.productId);
+        if (cached && cached.category.type !== "service") {
+          const before = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { stock: true },
+          });
+          const updated = await tx.product.update({
             where: { id: item.productId },
             data: { stock: { decrement: item.quantity } },
+          });
+          await tx.stockMovement.create({
+            data: {
+              type: "out",
+              quantity: -item.quantity,
+              before: before?.stock ?? updated.stock + item.quantity,
+              after: updated.stock,
+              unitCost: 0,
+              reason: "Bán hàng",
+              reference: code,
+              productId: item.productId,
+              userId: session.id,
+              tenantId: session.tenantId,
+            },
           });
         }
       }
