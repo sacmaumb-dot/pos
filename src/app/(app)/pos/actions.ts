@@ -1,8 +1,9 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { getTenantPrismaServer, prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { nextSaleCode, nextCustomerCode } from "@/lib/code-sequence";
 
 type Item = {
   productId: string;
@@ -43,14 +44,10 @@ export async function createSale(input: {
       if (existing) {
         resolvedCustomerId = existing.id;
       } else {
-        const allCust = await (await getTenantPrismaServer()).customer.findMany({ select: { code: true } });
-        const maxCustNum = allCust.reduce((m, c) => {
-          const n = parseInt(c.code.replace(/\D/g, "")) || 0;
-          return n > m ? n : m;
-        }, 0);
+        const code = await nextCustomerCode(prisma, session.tenantId);
         const created = await (await getTenantPrismaServer()).customer.create({
           data: {
-            code: `KH${String(maxCustNum + 1).padStart(5, "0")}`,
+            code,
             name,
             phone,
             tenantId: session.tenantId,
@@ -83,15 +80,10 @@ export async function createSale(input: {
     );
     const total = Math.max(0, subtotal - (input.discount || 0));
 
-    // Generate code
-    const allSales = await (await getTenantPrismaServer()).sale.findMany({ select: { code: true } });
-    const maxNum = allSales.reduce((m, s) => {
-      const n = parseInt(s.code.replace(/\D/g, "")) || 0;
-      return n > m ? n : m;
-    }, 0);
-    const code = `HD${String(maxNum + 1).padStart(5, "0")}`;
-
     const sale = await (await getTenantPrismaServer()).$transaction(async (tx) => {
+      // Atomic per-tenant counter — see src/lib/code-sequence.ts. This
+      // replaces the previous find-max + 1 pattern which had a TOCTOU race.
+      const code = await nextSaleCode(tx, session.tenantId);
       const created = await tx.sale.create({
         data: {
           code,
