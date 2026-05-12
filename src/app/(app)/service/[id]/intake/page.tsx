@@ -10,6 +10,7 @@ import {
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
 import { renderTemplate } from "@/lib/template-engine";
+import { sanitizeTemplateHtml } from "@/lib/sanitize-html";
 
 const DEVICE_LABELS: Record<string, string> = {
   phone: "Điện thoại",
@@ -97,7 +98,9 @@ export default async function ServiceIntakePrintPage({
 </div>
   `.trim();
 
-  const renderedContent = renderTemplate(template?.content, templateData, itemsTableHtml);
+  const renderedContent = sanitizeTemplateHtml(
+    renderTemplate(template?.content, templateData, itemsTableHtml),
+  );
 
   return (
     <Suspense fallback={null}>
