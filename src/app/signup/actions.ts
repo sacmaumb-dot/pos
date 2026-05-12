@@ -11,6 +11,20 @@ export async function registerTenant(formData: {
   password: string;
 }) {
   try {
+    // Enforce SystemSetting.allowSignup. The flag is exposed in the super-
+    // admin settings UI but was never read on the server, so toggling
+    // "Cho phép đăng ký" off had no effect — anyone could still POST to
+    // this action and create a tenant.
+    const systemSetting = await prisma.systemSetting.findUnique({
+      where: { id: "global" },
+    });
+    if (systemSetting && systemSetting.allowSignup === false) {
+      return {
+        ok: false,
+        error: "Đăng ký mới đang tạm khóa. Vui lòng liên hệ bộ phận hỗ trợ.",
+      };
+    }
+
     const slug = formData.slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "");
     if (slug.length < 3) {
       return { ok: false, error: "Subdomain phải có ít nhất 3 ký tự viết liền không dấu!" };
