@@ -1,10 +1,11 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { getTenantPrismaServer, prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { getPlan } from "@/lib/plans";
 import { getTenantFromHeader } from "@/lib/settings";
+import { nextCustomerCode } from "@/lib/code-sequence";
 
 export async function createCustomer(data: {
   name: string;
@@ -26,8 +27,10 @@ export async function createCustomer(data: {
       }
     }
 
-    const count = await tenantPrisma.customer.count();
-    const code = `KH${String(count + 1).padStart(5, "0")}`;
+    // Atomic per-tenant counter — replaces the previous "count + 1" pattern
+    // which produced duplicate codes after any customer was deleted (count
+    // dropped but the existing max code stayed) and under concurrent inserts.
+    const code = await nextCustomerCode(prisma, session.tenantId);
     await (await getTenantPrismaServer()).customer.create({
       data: {
         code,

@@ -1,9 +1,10 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { getTenantPrismaServer, prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { createNotification, notifyAdmins } from "@/lib/notifications";
+import { nextTicketCode, nextCustomerCode } from "@/lib/code-sequence";
 
 const STATUS_LABEL: Record<string, string> = {
   received: "Đã nhận",
@@ -56,14 +57,10 @@ export async function createServiceTicket(input: {
       if (existing) {
         customerId = existing.id;
       } else {
-        const allCust = await (await getTenantPrismaServer()).customer.findMany({ select: { code: true } });
-        const maxCustNum = allCust.reduce((m, c) => {
-          const n = parseInt(c.code.replace(/\D/g, "")) || 0;
-          return n > m ? n : m;
-        }, 0);
+        const code = await nextCustomerCode(prisma, session.tenantId);
         const created = await (await getTenantPrismaServer()).customer.create({
           data: {
-            code: `KH${String(maxCustNum + 1).padStart(5, "0")}`,
+            code,
             name,
             phone,
             tenantId: session.tenantId,
@@ -73,12 +70,9 @@ export async function createServiceTicket(input: {
       }
     }
 
-    const allTickets = await (await getTenantPrismaServer()).serviceTicket.findMany({ select: { code: true } });
-    const maxNum = allTickets.reduce((m, t) => {
-      const n = parseInt(t.code.replace(/\D/g, "")) || 0;
-      return n > m ? n : m;
-    }, 0);
-    const code = `SC${String(maxNum + 1).padStart(5, "0")}`;
+    // Atomic per-tenant counter — see src/lib/code-sequence.ts. This
+    // replaces the previous find-max + 1 pattern which had a TOCTOU race.
+    const code = await nextTicketCode(prisma, session.tenantId);
 
     const ticket = await (await getTenantPrismaServer()).serviceTicket.create({
       data: {

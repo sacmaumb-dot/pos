@@ -25,6 +25,15 @@ model Tenant {
   subscriptionPlan      String    @default("trial") // trial | basic | premium
   subscriptionExpiresAt DateTime?
 
+  // Atomic per-tenant counters for human-readable codes (HDxxxxx / SCxxxxx
+  // / KHxxxxx). Incremented via `update { increment: 1 }` so concurrent
+  // sales/tickets/customers never share a code. On first use after this
+  // migration, the counters are rolled forward past any pre-existing
+  // codes — see src/lib/code-sequence.ts.
+  lastSaleNumber     Int @default(0)
+  lastTicketNumber   Int @default(0)
+  lastCustomerNumber Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
