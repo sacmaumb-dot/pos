@@ -1,19 +1,19 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { WorkspaceClient } from "./workspace-client";
 
 export default async function PosPage() {
   const [products, categories, customers, technicians] = await Promise.all([
-    (await getTenantPrismaServer()).product.findMany({
+    prisma.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       include: { category: true },
     }),
-    (await getTenantPrismaServer()).category.findMany({ orderBy: { name: "asc" } }),
-    (await getTenantPrismaServer()).customer.findMany({
+    prisma.category.findMany({ orderBy: { name: "asc" } }),
+    prisma.customer.findMany({
       orderBy: { name: "asc" },
       take: 200,
     }),
-    (await getTenantPrismaServer()).user.findMany({
+    prisma.user.findMany({
       where: { role: { in: ["technician", "admin"] }, active: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true },

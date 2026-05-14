@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import {
   Card,
@@ -39,7 +39,7 @@ export default async function CustomersPage({
   }
 
   const [customers, totalCount, monthCount] = await Promise.all([
-    (await getTenantPrismaServer()).customer.findMany({
+    prisma.customer.findMany({
       where,
       orderBy: { createdAt: "desc" },
       include: {
@@ -48,8 +48,8 @@ export default async function CustomersPage({
       },
       take: 200,
     }),
-    (await getTenantPrismaServer()).customer.count(),
-    (await getTenantPrismaServer()).customer.count({
+    prisma.customer.count(),
+    prisma.customer.count({
       where: {
         createdAt: {
           gte: new Date(new Date().setDate(new Date().getDate() - 30)),

@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { revalidatePath, updateTag } from "next/cache";
 import { writeFile, mkdir } from "fs/promises";
@@ -28,8 +28,6 @@ export async function updateSettings(data: {
     if (!(await requireAdmin())) {
       return { ok: false as const, error: "Không có quyền" };
     }
-    const session = (await getSession())!;
-    const tp = await getTenantPrismaServer();
     const payload = {
       shopName: data.shopName,
       siteTitle: data.siteTitle,
@@ -43,20 +41,11 @@ export async function updateSettings(data: {
       bankAccountName: data.bankAccountName || null,
     };
 
-    // AppSetting has no @@unique([tenantId]) constraint, so we cannot use
-    // upsert with a tenantId-only where. Use findFirst (tenant-scoped via
-    // the extension) and then update-or-create.
-    const existing = await tp.appSetting.findFirst({ select: { id: true } });
-    if (existing) {
-      await tp.appSetting.update({
-        where: { id: existing.id },
-        data: payload,
-      });
-    } else {
-      await tp.appSetting.create({
-        data: { ...payload, tenantId: session.tenantId },
-      });
-    }
+    await prisma.appSetting.upsert({
+      where: { id: "default" },
+      update: payload,
+      create: { ...payload, id: "default" },
+    });
 
     updateTag("app-settings");
     revalidatePath("/", "layout");
@@ -95,20 +84,12 @@ export async function uploadAsset(formData: FormData) {
     await writeFile(filePath, buf);
     const url = `/uploads/${fileName}`;
 
-    const session = (await getSession())!;
-    const tp = await getTenantPrismaServer();
     const field = kind === "favicon" ? "faviconUrl" : "logoUrl";
-    const existing = await tp.appSetting.findFirst({ select: { id: true } });
-    if (existing) {
-      await tp.appSetting.update({
-        where: { id: existing.id },
-        data: { [field]: url },
-      });
-    } else {
-      await tp.appSetting.create({
-        data: { [field]: url, tenantId: session.tenantId },
-      });
-    }
+    await prisma.appSetting.upsert({
+      where: { id: "default" },
+      update: { [field]: url },
+      create: { id: "default", [field]: url },
+    });
 
     updateTag("app-settings");
     revalidatePath("/", "layout");
@@ -127,15 +108,11 @@ export async function clearAsset(kind: "logo" | "favicon") {
     if (kind !== "logo" && kind !== "favicon") {
       return { ok: false as const, error: "Loại file không hợp lệ" };
     }
-    const tp = await getTenantPrismaServer();
     const field = kind === "favicon" ? "faviconUrl" : "logoUrl";
-    const existing = await tp.appSetting.findFirst({ select: { id: true } });
-    if (existing) {
-      await tp.appSetting.update({
-        where: { id: existing.id },
-        data: { [field]: null },
-      });
-    }
+    await prisma.appSetting.update({
+      where: { id: "default" },
+      data: { [field]: null },
+    });
     updateTag("app-settings");
     revalidatePath("/", "layout");
     return { ok: true as const };

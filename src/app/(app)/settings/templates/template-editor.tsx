@@ -27,6 +27,7 @@ type Template = {
 
 const MOCK_DATA = {
   ten_cua_hang: "TechShop",
+  shop_tagline: "Chuyên sửa chữa Laptop & Điện thoại",
   dia_chi_cua_hang: "123 Đường Láng, Hà Nội",
   sdt_cua_hang: "0988 123 456",
   ma_phieu: "SC00001",
@@ -59,6 +60,7 @@ const MOCK_DATA = {
 
 const VARIABLES = [
   { key: "{ten_cua_hang}", label: "Tên cửa hàng" },
+  { key: "{shop_tagline}", label: "Slogan cửa hàng" },
   { key: "{dia_chi_cua_hang}", label: "Địa chỉ cửa hàng" },
   { key: "{sdt_cua_hang}", label: "SĐT cửa hàng" },
   { key: "{ma_phieu}", label: "Mã phiếu" },
@@ -83,6 +85,7 @@ const VARIABLES = [
   { key: "{loai_may}", label: "Loại máy (Dịch vụ)" },
   { key: "{ten_may}", label: "Tên máy (Dịch vụ)" },
   { key: "{hang}", label: "Hãng máy" },
+  { key: "{model}", label: "Model máy" },
   { key: "{imei}", label: "IMEI (Dịch vụ)" },
   { key: "{tinh_trang}", label: "Tình trạng" },
   { key: "{loi_yeu_cau}", label: "Yêu cầu" },
@@ -91,6 +94,8 @@ const VARIABLES = [
   { key: "{ngay_tra}", label: "Ngày trả" },
   { key: "{bao_hanh}", label: "Bảo hành" },
   { key: "{ghi_chu}", label: "Ghi chú" },
+  { key: "{qr}", label: "Mã QR thanh toán" },
+  { key: "{sanpham}", label: "Bảng danh sách sản phẩm (Mặc định)" },
 ];
 
 export function TemplateEditor({ templates }: { templates: Template[] }) {
@@ -118,7 +123,38 @@ export function TemplateEditor({ templates }: { templates: Template[] }) {
     });
   }
 
-  const renderedContent = sanitizeTemplateHtml(renderTemplate(content, MOCK_DATA));
+  const mockItemsHtml = `
+<div style="margin: 15px 0;">
+  <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+    <thead>
+      <tr style="border-bottom: 2px solid #000; text-align: left; font-size: 11px; text-transform: uppercase;">
+        <th style="padding: 8px 0; width: 60%; color: #000;">Sản phẩm</th>
+        <th style="padding: 8px 0; width: 10%; text-align: center; color: #000;">SL</th>
+        <th style="padding: 8px 0; width: 30%; text-align: right; color: #000;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px dashed #ccc;">
+        <td style="padding: 10px 0;">
+          <div style="font-weight: bold; font-size: 13px; color: #000;">Sản phẩm Mẫu 01</div>
+          <div style="font-size: 10px; color: #666; margin-top: 2px;">BH: 12T</div>
+        </td>
+        <td style="padding: 10px 0; text-align: center; font-size: 13px;">1</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 13px;">10.000.000đ</td>
+      </tr>
+      <tr style="border-bottom: 1px dashed #ccc;">
+        <td style="padding: 10px 0;">
+          <div style="font-weight: bold; font-size: 13px; color: #000;">Dịch vụ Mẫu 02</div>
+          <div style="font-size: 10px; color: #666; margin-top: 2px;">BH: 3T</div>
+        </td>
+        <td style="padding: 10px 0; text-align: center; font-size: 13px;">2</td>
+        <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 13px;">10.000.000đ</td>
+      </tr>
+    </tbody>
+  </table>
+</div>`.trim();
+
+  const renderedContent = sanitizeTemplateHtml(renderTemplate(content, MOCK_DATA, mockItemsHtml));
 
   const config = useMemo(() => ({
     readonly: false,

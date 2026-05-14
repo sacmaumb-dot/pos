@@ -3,37 +3,18 @@ import { LoginForm } from "./login-form";
 import { Laptop, Smartphone, Wrench } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { getSettings, getTenantFromHeader } from "@/lib/settings";
-import { DomainForm } from "./domain-form";
+import { getSettings } from "@/lib/settings";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ admin?: string }>;
-}) {
-  const { admin } = await searchParams;
+export default async function LoginPage() {
   const user = await getSession();
-  const headersList = await headers();
-  const slug = headersList.get("x-tenant-slug");
-  const tenant = await getTenantFromHeader();
-  const isAdminMode = admin === "true";
-
-  // Block access to invalid subdomains
-  if (slug && !tenant) {
-    const isLocalhost = headersList.get("host")?.includes("localhost");
-    const rootDomain = isLocalhost ? "http://localhost:3000" : "https://mypos.vn";
-    redirect(rootDomain + "/login");
-  }
-
-  // If already logged in to THIS tenant, go to dashboard
-  if (user && tenant && user.tenantId === tenant.id) {
-    redirect("/");
+  
+  // If already logged in, go to dashboard
+  if (user) {
+    redirect("/pos");
   }
 
   const settings = await getSettings();
-  const isRootDomain = !slug || slug === "www";
-  const shopName = tenant ? settings.shopName : "MyPOS";
+  const shopName = settings.shopName || "MyPOS";
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
@@ -48,7 +29,7 @@ export default async function LoginPage({
           <h1 className="text-4xl font-bold leading-tight">
             Hệ thống quản lý cửa hàng
             <br />
-            {tenant ? settings.shopTagline || "Laptop & Điện thoại" : "Laptop & Điện thoại"}
+            {settings.shopTagline || "Laptop & Điện thoại"}
           </h1>
           <p className="text-lg text-white/80 max-w-md">
             Quản lý bán hàng, sửa chữa, dịch vụ, kho hàng và khách hàng
@@ -75,34 +56,15 @@ export default async function LoginPage({
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-bold tracking-tight">
-              {isRootDomain 
-                ? (isAdminMode ? "Quản trị hệ thống" : "Xác định cửa hàng") 
-                : "Đăng nhập"}
+              Đăng nhập
             </h2>
             <p className="text-muted-foreground text-sm">
-              {isRootDomain 
-                ? (isAdminMode 
-                   ? "Vui lòng nhập tài khoản quản trị MyPOS." 
-                   : "Vui lòng nhập tên miền cửa hàng của bạn để tiếp tục.") 
-                : `Truy cập vào hệ thống của ${shopName}.`}
+              Truy cập vào hệ thống quản lý của {shopName}.
             </p>
           </div>
           <Suspense fallback={null}>
-            {(isRootDomain && !isAdminMode) ? (
-              <DomainForm host={headersList.get("host") || ""} />
-            ) : (
-              <LoginForm />
-            )}
+            <LoginForm />
           </Suspense>
-          
-          {isRootDomain && (
-            <div className="text-center text-sm text-muted-foreground pt-4">
-              Bạn chưa có cửa hàng?{" "}
-              <a href="/signup" className="text-primary font-bold hover:underline">
-                Đăng ký ngay
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </div>

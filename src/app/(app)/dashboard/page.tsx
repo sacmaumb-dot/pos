@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import {
   Card,
@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { formatVND, formatDateTime, formatNumber } from "@/lib/format";
 import {
   ShoppingCart,
@@ -17,8 +16,6 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
-  ArrowUpRight,
-  ArrowDownRight,
   Calendar,
   Smartphone,
   ChevronRight,
@@ -40,7 +37,6 @@ import { cn } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await requireSession();
-  const tenantPrisma = await getTenantPrismaServer();
   const now = new Date();
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -48,46 +44,65 @@ export default async function DashboardPage() {
   const last30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
-    todayRevenue,
-    monthRevenue,
+    todaySaleRevenue,
+    todayServiceRevenue,
+    monthSaleRevenue,
+    monthServiceRevenue,
     todayOrders,
     activeTickets,
     lowStockProducts,
     customerCount,
     recentTickets,
     last30Sales,
+    last30ServiceRevenue,
   ] = await Promise.all([
-    tenantPrisma.sale.aggregate({
+    prisma.sale.aggregate({
       where: { createdAt: { gte: today }, status: "paid" },
       _sum: { total: true },
     }),
-    tenantPrisma.sale.aggregate({
+    prisma.serviceTicket.aggregate({
+      where: { deliveredAt: { gte: today } },
+      _sum: { finalCost: true },
+    }),
+    prisma.sale.aggregate({
       where: { createdAt: { gte: startOfMonth }, status: "paid" },
       _sum: { total: true },
     }),
-    tenantPrisma.sale.count({ where: { createdAt: { gte: today } } }),
-    tenantPrisma.serviceTicket.count({
+    prisma.serviceTicket.aggregate({
+      where: { deliveredAt: { gte: startOfMonth } },
+      _sum: { finalCost: true },
+    }),
+    prisma.sale.count({ where: { createdAt: { gte: today } } }),
+    prisma.serviceTicket.count({
       where: {
         status: { notIn: ["delivered", "cancelled"] },
       },
     }),
-    tenantPrisma.product.findMany({
+    prisma.product.findMany({
       where: { stock: { lt: 5 }, isActive: true },
       orderBy: { stock: "asc" },
       take: 5,
     }),
-    tenantPrisma.customer.count(),
-    tenantPrisma.serviceTicket.findMany({
+    prisma.customer.count(),
+    prisma.serviceTicket.findMany({
       take: 6,
       orderBy: { createdAt: "desc" },
       include: { customer: true },
     }),
-    tenantPrisma.sale.findMany({
+    prisma.sale.findMany({
       where: { createdAt: { gte: last30 }, status: "paid" },
       orderBy: { createdAt: "asc" },
       select: { createdAt: true, total: true },
     }),
+    prisma.serviceTicket.findMany({
+      where: { deliveredAt: { gte: last30 } },
+      orderBy: { deliveredAt: "asc" },
+      select: { deliveredAt: true, finalCost: true },
+    }),
   ]);
+
+  const totalTodayRevenue = (todaySaleRevenue._sum.total || 0) + (todayServiceRevenue._sum.finalCost || 0);
+  const totalMonthRevenue = (monthSaleRevenue._sum.total || 0) + (monthServiceRevenue._sum.finalCost || 0);
 
   // Build chart data
   const revenueByDay = new Map<string, number>();
@@ -96,10 +111,24 @@ export default async function DashboardPage() {
     const key = d.toISOString().slice(0, 10);
     revenueByDay.set(key, 0);
   }
+  
+  // Add direct sales
   for (const s of last30Sales) {
     const key = s.createdAt.toISOString().slice(0, 10);
-    revenueByDay.set(key, (revenueByDay.get(key) || 0) + s.total);
+    if (revenueByDay.has(key)) {
+      revenueByDay.set(key, (revenueByDay.get(key) || 0) + s.total);
+    }
   }
+
+  // Add service revenue
+  for (const s of last30ServiceRevenue) {
+    if (!s.deliveredAt) continue;
+    const key = s.deliveredAt.toISOString().slice(0, 10);
+    if (revenueByDay.has(key)) {
+      revenueByDay.set(key, (revenueByDay.get(key) || 0) + s.finalCost);
+    }
+  }
+
   const chartData = Array.from(revenueByDay.entries()).map(([date, total]) => ({
     date,
     total,
@@ -107,7 +136,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header section matched with Customers style */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent p-6 rounded-2xl border border-border/50">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -130,19 +158,18 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards Grid matched with Customers style */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi
           icon={<TrendingUp className="size-5" />}
           label="Doanh thu ngày"
-          value={formatVND(todayRevenue._sum.total || 0)}
+          value={formatVND(totalTodayRevenue)}
           subValue={`${todayOrders} đơn hàng`}
           gradient="from-blue-500 to-indigo-600"
         />
         <Kpi
           icon={<Calendar className="size-5" />}
           label="Doanh thu tháng"
-          value={formatVND(monthRevenue._sum.total || 0)}
+          value={formatVND(totalMonthRevenue)}
           subValue="Tháng hiện tại"
           gradient="from-emerald-400 to-teal-600"
         />
@@ -162,9 +189,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue Chart */}
         <Card className="lg:col-span-2 border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
           <CardHeader className="pb-2 border-b border-border/60">
             <div className="flex items-center justify-between">
@@ -184,7 +209,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Inventory Alert */}
         <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-slate-900 text-white">
           <CardHeader className="border-b border-white/10">
             <div className="flex items-center justify-between">
@@ -230,7 +254,6 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Tickets Table */}
       <Card className="border border-border/80 shadow-lg rounded-2xl overflow-hidden bg-card/65 backdrop-blur-sm">
         <CardHeader className="flex flex-row items-center justify-between border-b border-border/60 py-4 px-6">
           <div className="space-y-0.5">

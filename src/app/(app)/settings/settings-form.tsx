@@ -8,18 +8,26 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectField } from "@/components/ui/select-field";
-import { Loader2, Upload, Trash2, Store, Printer, Zap } from "lucide-react";
+import { 
+  Loader2, Upload, Trash2, Store, Printer, 
+  CreditCard, Image as ImageIcon, Check, ChevronRight
+} from "lucide-react";
 import { toast } from "sonner";
 import type { AppSettings } from "@/lib/settings";
 import { updateSettings, uploadAsset, clearAsset } from "./actions";
+import { cn } from "@/lib/utils";
+
+type TabType = "general" | "print" | "payment" | "assets";
 
 export function SettingsForm({ initial }: { initial: AppSettings }) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<TabType>("general");
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     shopName: initial.shopName,
@@ -54,188 +62,268 @@ export function SettingsForm({ initial }: { initial: AppSettings }) {
     });
   }
 
+  const tabs = [
+    { id: "general", label: "Cửa hàng", icon: Store, desc: "Thông tin cơ bản & liên hệ" },
+    { id: "print", label: "In ấn", icon: Printer, desc: "Cấu hình hoá đơn & mẫu in" },
+    { id: "payment", label: "Thanh toán", icon: CreditCard, desc: "Ngân hàng & VietQR" },
+    { id: "assets", label: "Hình ảnh", icon: ImageIcon, desc: "Logo & Biểu tượng hệ thống" },
+  ];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Card className="lg:col-span-2 border border-border/80 shadow-lg rounded-xl overflow-hidden bg-card/65 backdrop-blur-sm">
-        <CardHeader className="bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent border-b border-border/60 pb-4 px-6">
-          <CardTitle className="text-base font-bold flex items-center gap-2.5 text-foreground">
-            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <Store className="size-4" />
+    <div className="flex flex-col lg:flex-row gap-8 items-start">
+      {/* Sidebar Navigation */}
+      <div className="w-full lg:w-72 shrink-0 space-y-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as TabType)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all duration-300 group",
+              activeTab === tab.id 
+                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]" 
+                : "hover:bg-muted text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <div className={cn(
+              "p-2 rounded-xl transition-colors",
+              activeTab === tab.id ? "bg-white/20" : "bg-muted group-hover:bg-background"
+            )}>
+              <tab.icon className="size-5" />
             </div>
-            Cấu hình thông tin cửa hàng
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          {/* Section 1: Basic Info */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 border-l-2 border-primary pl-2">Thông tin cơ bản</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Tên cửa hàng *">
-                <Input
-                  value={form.shopName}
-                  onChange={(e) => set("shopName", e.target.value)}
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
-              <Field label="Slogan / Tagline">
-                <Input
-                  value={form.shopTagline}
-                  onChange={(e) => set("shopTagline", e.target.value)}
-                  placeholder="Laptop & Điện thoại"
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold leading-none">{tab.label}</div>
+              <div className={cn(
+                "text-[10px] mt-1 truncate",
+                activeTab === tab.id ? "text-primary-foreground/70" : "text-muted-foreground"
+              )}>
+                {tab.desc}
+              </div>
             </div>
-            <Field label="Tiêu đề trang web (Hiển thị trên tab trình duyệt) *">
-              <Input
-                value={form.siteTitle}
-                onChange={(e) => set("siteTitle", e.target.value)}
-                className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-              />
-            </Field>
-          </div>
+            {activeTab === tab.id && <ChevronRight className="size-4 opacity-50" />}
+          </button>
+        ))}
+      </div>
 
-          {/* Section 2: Contact & Invoicing Address */}
-          <div className="space-y-4 pt-4 border-t border-border/50">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 border-l-2 border-primary pl-2">Liên hệ & Địa chỉ hoá đơn</h3>
-            <Field label="Địa chỉ cửa hàng (Sẽ in trực tiếp trên hoá đơn)">
-              <Input
-                value={form.shopAddress}
-                onChange={(e) => set("shopAddress", e.target.value)}
-                placeholder="123 Lê Lợi, Q.1, TP.HCM"
-                className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-              />
-            </Field>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="SĐT cửa hàng (Sẽ in trực tiếp trên hoá đơn)">
-                <Input
-                  value={form.shopPhone}
-                  onChange={(e) => set("shopPhone", e.target.value)}
-                  placeholder="1900 1234"
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
-              <Field label="Email cửa hàng">
-                <Input
-                  type="email"
-                  value={form.shopEmail}
-                  onChange={(e) => set("shopEmail", e.target.value)}
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
+      {/* Main Content Area */}
+      <div className="flex-1 w-full space-y-6">
+        <Card className="border border-border/80 shadow-xl rounded-3xl overflow-hidden bg-card/65 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <CardHeader className="bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent border-b border-border/50 pb-6 px-8">
+            <div className="flex items-center gap-3">
+               <div className="p-3 rounded-2xl bg-primary/10 text-primary shadow-inner">
+                  {tabs.find(t => t.id === activeTab)?.icon && (() => {
+                    const Icon = tabs.find(t => t.id === activeTab)!.icon;
+                    return <Icon className="size-6" />;
+                  })()}
+               </div>
+               <div>
+                  <CardTitle className="text-xl font-black tracking-tight">
+                    {tabs.find(t => t.id === activeTab)?.label}
+                  </CardTitle>
+                  <CardDescription className="text-xs font-medium">
+                    {tabs.find(t => t.id === activeTab)?.desc}
+                  </CardDescription>
+               </div>
             </div>
-          </div>
-
-          {/* Section: Bank Account & VietQR */}
-          <div className="space-y-4 pt-4 border-t border-border/50">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 border-l-2 border-primary pl-2">Tài khoản ngân hàng & Thanh toán QR</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="Ngân hàng nhận chuyển khoản">
-                <SelectField
-                  value={form.bankId}
-                  onValueChange={(v) => set("bankId", v ?? "")}
-                  options={[
-                    { value: "", label: "-- Chọn ngân hàng --" },
-                    { value: "vietcombank", label: "Vietcombank (VCB)" },
-                    { value: "mbbank", label: "MBBank (MB)" },
-                    { value: "bidv", label: "BIDV" },
-                    { value: "vietinbank", label: "VietinBank" },
-                    { value: "techcombank", label: "Techcombank (TCB)" },
-                    { value: "acb", label: "ACB" },
-                    { value: "tpb", label: "TPBank (TPB)" },
-                    { value: "vpb", label: "VPBank (VPB)" },
-                    { value: "sacombank", label: "Sacombank" },
-                    { value: "agribank", label: "Agribank" },
-                  ]}
-                  className="w-full rounded-lg border-border/80"
-                />
-              </Field>
-              <Field label="Số tài khoản ngân hàng">
-                <Input
-                  value={form.bankAccount}
-                  onChange={(e) => set("bankAccount", e.target.value)}
-                  placeholder="Ví dụ: 0123456789"
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
-              <Field label="Tên chủ tài khoản (Không dấu)">
-                <Input
-                  value={form.bankAccountName}
-                  onChange={(e) => set("bankAccountName", e.target.value.toUpperCase())}
-                  placeholder="Ví dụ: NGUYEN VAN A"
-                  className="rounded-lg border-border/80 focus-visible:ring-primary/20"
-                />
-              </Field>
-            </div>
-            <p className="text-[11px] text-muted-foreground/80 leading-relaxed italic bg-blue-500/5 p-3 rounded-lg border border-blue-500/10">
-              * Hệ thống VietQR sẽ tự động tạo QR Code thanh toán kèm theo số tiền thực tế và mã đơn hàng tương ứng khi khách hàng chọn hình thức thanh toán "Chuyển khoản". Đảm bảo bạn nhập chính xác Số tài khoản để tiền về đúng nơi!
-            </p>
-          </div>
-
-          {/* Section 3: Print Settings */}
-          <div className="space-y-4 pt-4 border-t border-border/50">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground/90 border-l-2 border-primary pl-2">Cấu hình hoá đơn & In ấn</h3>
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 p-4 rounded-xl bg-accent/30 border border-border/40">
-              <div className="flex-1 max-w-md">
-                <Field label="Khổ giấy in mặc định">
-                  <SelectField
-                    value={form.printSize}
-                    onValueChange={(v) => set("printSize", v ?? "A4")}
-                    options={[
-                      { value: "A4", label: "A4 (Giấy thường văn phòng)" },
-                      { value: "80mm", label: "80mm (Giấy nhiệt cuộn K80)" },
-                    ]}
-                    className="w-full rounded-lg border-border/80"
+          </CardHeader>
+          
+          <CardContent className="p-8">
+            {activeTab === "general" && (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Field label="Tên cửa hàng *" hint="Tên hiển thị trên các văn bản">
+                    <Input
+                      value={form.shopName}
+                      onChange={(e) => set("shopName", e.target.value)}
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                    />
+                  </Field>
+                  <Field label="Slogan / Tagline" hint="Câu khẩu hiệu ngắn gọn">
+                    <Input
+                      value={form.shopTagline}
+                      onChange={(e) => set("shopTagline", e.target.value)}
+                      placeholder="Laptop & Điện thoại"
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                    />
+                  </Field>
+                </div>
+                <Field label="Tiêu đề trang web *" hint="Hiển thị trên tab trình duyệt">
+                  <Input
+                    value={form.siteTitle}
+                    onChange={(e) => set("siteTitle", e.target.value)}
+                    className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
                   />
                 </Field>
+                <div className="pt-6 border-t border-border/50 space-y-6">
+                   <Field label="Địa chỉ liên hệ" hint="Địa chỉ in trên hoá đơn">
+                    <Input
+                      value={form.shopAddress}
+                      onChange={(e) => set("shopAddress", e.target.value)}
+                      placeholder="123 Lê Lợi, Q.1, TP.HCM"
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                    />
+                  </Field>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Field label="Số điện thoại" hint="Hotline hỗ trợ">
+                      <Input
+                        value={form.shopPhone}
+                        onChange={(e) => set("shopPhone", e.target.value)}
+                        placeholder="1900 1234"
+                        className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                      />
+                    </Field>
+                    <Field label="Email liên hệ" hint="Hộp thư CSKH">
+                      <Input
+                        type="email"
+                        value={form.shopEmail}
+                        onChange={(e) => set("shopEmail", e.target.value)}
+                        className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                      />
+                    </Field>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  className="rounded-lg border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all font-semibold"
-                  onClick={() => router.push("/settings/templates")}
-                >
-                  <Printer className="size-4 mr-2 text-primary" />
-                  Tùy biến mẫu in
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-lg border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all font-semibold"
-                  onClick={() => router.push("/settings/subscription")}
-                >
-                  <Zap className="size-4 mr-2 text-primary" />
-                  Gói dịch vụ
-                </Button>
+            )}
+
+            {activeTab === "print" && (
+              <div className="space-y-8">
+                 <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-start gap-4">
+                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
+                      <Printer className="size-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-amber-900">Cấu hình in ấn chuyên nghiệp</h4>
+                      <p className="text-xs text-amber-700/80 mt-1 leading-relaxed">
+                        Thiết lập khổ giấy và mẫu in phù hợp với máy in của bạn. Hệ thống hỗ trợ cả in nhiệt K80 và in văn phòng A4.
+                      </p>
+                    </div>
+                 </div>
+
+                 <Field label="Khổ giấy mặc định">
+                    <SelectField
+                      value={form.printSize}
+                      onValueChange={(v) => set("printSize", v ?? "A4")}
+                      options={[
+                        { value: "A4", label: "Khổ giấy A4 / A5 (Văn phòng)" },
+                        { value: "80mm", label: "Khổ giấy 80mm (Máy in nhiệt K80)" },
+                      ]}
+                      className="w-full rounded-xl border-border/80 h-11"
+                    />
+                  </Field>
+
+                  <div className="pt-6 border-t border-border/50">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-primary/5 border border-primary/10">
+                      <div>
+                        <h4 className="text-sm font-bold">Quản lý mẫu in</h4>
+                        <p className="text-xs text-muted-foreground mt-1">Tuỳ biến nội dung và thiết kế hoá đơn</p>
+                      </div>
+                      <Button
+                        variant="default"
+                        className="rounded-xl font-bold shadow-lg shadow-primary/20"
+                        onClick={() => router.push("/settings/templates")}
+                      >
+                        <Printer className="size-4 mr-2" />
+                        Tuỳ biến mẫu in ngay
+                      </Button>
+                    </div>
+                  </div>
               </div>
+            )}
+
+            {activeTab === "payment" && (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Field label="Ngân hàng thụ hưởng">
+                    <SelectField
+                      value={form.bankId}
+                      onValueChange={(v) => set("bankId", v ?? "")}
+                      options={[
+                        { value: "", label: "-- Chọn ngân hàng --" },
+                        { value: "vietcombank", label: "Vietcombank (VCB)" },
+                        { value: "mbbank", label: "MBBank (MB)" },
+                        { value: "bidv", label: "BIDV" },
+                        { value: "vietinbank", label: "VietinBank" },
+                        { value: "techcombank", label: "Techcombank (TCB)" },
+                        { value: "acb", label: "ACB" },
+                        { value: "tpb", label: "TPBank (TPB)" },
+                        { value: "vpb", label: "VPBank (VPB)" },
+                        { value: "sacombank", label: "Sacombank" },
+                        { value: "agribank", label: "Agribank" },
+                      ]}
+                      className="w-full rounded-xl border-border/80 h-11"
+                    />
+                  </Field>
+                  <Field label="Số tài khoản">
+                    <Input
+                      value={form.bankAccount}
+                      onChange={(e) => set("bankAccount", e.target.value)}
+                      placeholder="0123456789"
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                    />
+                  </Field>
+                  <Field label="Tên chủ tài khoản">
+                    <Input
+                      value={form.bankAccountName}
+                      onChange={(e) => set("bankAccountName", e.target.value.toUpperCase())}
+                      placeholder="NGUYEN VAN A"
+                      className="rounded-xl border-border/80 focus-visible:ring-primary/20 h-11"
+                    />
+                  </Field>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                      <CreditCard className="size-4" />
+                    </div>
+                    <h4 className="text-sm font-bold text-blue-900">Tự động hoá thanh toán với VietQR</h4>
+                  </div>
+                  <p className="text-xs text-blue-700/80 leading-relaxed">
+                    Hệ thống sẽ tự động tạo mã QR Code thanh toán chính xác số tiền và nội dung chuyển khoản cho từng đơn hàng. Điều này giúp bạn nhận tiền nhanh chóng và tránh sai sót khi khách hàng nhập liệu thủ công.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "assets" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <AssetCard
+                  kind="logo"
+                  label="Logo cửa hàng"
+                  hint="Hiển thị trên Header và Hoá đơn. PNG/JPG/SVG, tối đa 2MB."
+                  currentUrl={initial.logoUrl}
+                />
+                <AssetCard
+                  kind="favicon"
+                  label="Favicon"
+                  hint="Biểu tượng trên tab trình duyệt. Ảnh vuông 1:1, tối đa 1MB."
+                  currentUrl={initial.faviconUrl}
+                />
+              </div>
+            )}
+
+            <div className="mt-12 pt-8 border-t border-border/50 flex items-center justify-between gap-4">
+               <div className="hidden sm:block">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-2">
+                    <Check className="size-4 text-emerald-500" />
+                    Hệ thống đã sẵn sàng với các thay đổi mới
+                  </p>
+               </div>
+               <Button 
+                onClick={submit} 
+                disabled={pending} 
+                size="lg"
+                className="w-full sm:w-auto px-10 rounded-2xl font-black shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-all hover:scale-[1.02]"
+               >
+                {pending ? (
+                  <Loader2 className="size-5 animate-spin mr-2" />
+                ) : (
+                  <Store className="size-5 mr-2" />
+                )}
+                Lưu cấu hình ngay
+              </Button>
             </div>
-          </div>
-
-          <div className="flex justify-end pt-4 border-t border-border/50">
-            <Button onClick={submit} disabled={pending} className="px-6 py-2 rounded-lg font-semibold shadow-md shadow-primary/15 hover:shadow-primary/25 transition-all">
-              {pending ? (
-                <Loader2 className="size-4 animate-spin mr-2" />
-              ) : (
-                <Store className="size-4 mr-2" />
-              )}
-              Lưu cấu hình
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-6">
-        <AssetCard
-          kind="logo"
-          label="Logo cửa hàng"
-          hint="Hiển thị trên header trang quản trị và mẫu hoá đơn in ấn. Định dạng PNG, JPG, SVG, tối đa 2MB."
-          currentUrl={initial.logoUrl}
-        />
-        <AssetCard
-          kind="favicon"
-          label="Favicon hệ thống"
-          hint="Biểu tượng thu nhỏ xuất hiện trên tab trình duyệt. Khuyến nghị ảnh vuông tỉ lệ 1:1, tối đa 1MB."
-          currentUrl={initial.faviconUrl}
-        />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -243,14 +331,19 @@ export function SettingsForm({ initial }: { initial: AppSettings }) {
 
 function Field({
   label,
+  hint,
   children,
 }: {
   label: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-semibold text-muted-foreground/90">{label}</Label>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs font-bold text-foreground/80 ml-1 uppercase tracking-wider">{label}</Label>
+        {hint && <span className="text-[10px] text-muted-foreground font-medium">{hint}</span>}
+      </div>
       {children}
     </div>
   );
@@ -303,12 +396,12 @@ function AssetCard({
   }
 
   return (
-    <Card className="border border-border/80 shadow-md rounded-xl overflow-hidden bg-card/65 backdrop-blur-sm">
-      <CardHeader className="bg-gradient-to-r from-primary/5 via-blue-500/5 to-transparent border-b border-border/60 pb-3 px-5">
-        <CardTitle className="text-xs font-bold uppercase tracking-wider text-foreground">{label}</CardTitle>
+    <Card className="border border-border/80 shadow-md rounded-2xl overflow-hidden bg-background/50 backdrop-blur-sm group hover:border-primary/20 transition-all">
+      <CardHeader className="bg-muted/30 border-b border-border/50 py-4 px-6">
+        <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">{label}</CardTitle>
       </CardHeader>
-      <CardContent className="p-5 space-y-4">
-        <div className="aspect-video bg-muted/20 hover:bg-muted/30 rounded-xl border border-dashed border-border/80 flex items-center justify-center overflow-hidden transition-colors relative group shadow-inner">
+      <CardContent className="p-6 space-y-4">
+        <div className="aspect-video bg-muted/20 hover:bg-muted/30 rounded-2xl border-2 border-dashed border-border/60 flex items-center justify-center overflow-hidden transition-all relative group/img shadow-inner cursor-pointer" onClick={() => inputRef.current?.click()}>
           {currentUrl ? (
             <div className="relative w-full h-full p-4 flex items-center justify-center">
               <Image
@@ -316,19 +409,24 @@ function AssetCard({
                 alt={label}
                 width={200}
                 height={120}
-                className="object-contain max-h-32 rounded transition-transform duration-300 group-hover:scale-105"
+                className="object-contain max-h-32 rounded-lg transition-transform duration-500 group-hover/img:scale-110"
                 unoptimized
               />
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                 <Upload className="size-8 text-white" />
+              </div>
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground flex flex-col items-center gap-2">
-              <Upload className="size-6 text-muted-foreground/60 animate-pulse" />
-              <span>Chưa có ảnh</span>
+            <div className="text-xs text-muted-foreground flex flex-col items-center gap-3">
+              <div className="size-12 rounded-full bg-background flex items-center justify-center border shadow-sm">
+                <Upload className="size-5 text-muted-foreground/60" />
+              </div>
+              <span className="font-bold">Chọn ảnh tải lên</span>
             </div>
           )}
         </div>
-        <p className="text-[11px] leading-relaxed text-muted-foreground/80">{hint}</p>
-        <div className="flex gap-2 pt-1">
+        <p className="text-[10px] leading-relaxed text-muted-foreground font-medium px-1">{hint}</p>
+        <div className="flex gap-2">
           <input
             ref={inputRef}
             type="file"
@@ -345,14 +443,14 @@ function AssetCard({
             size="sm"
             onClick={() => inputRef.current?.click()}
             disabled={pending}
-            className="flex-1 rounded-lg border-border/80 hover:bg-primary/5 hover:border-primary/40 transition-all font-medium"
+            className="flex-1 rounded-xl border-border hover:bg-primary/5 hover:border-primary/40 transition-all font-bold"
           >
             {pending ? (
-              <Loader2 className="size-3.5 animate-spin mr-1.5" />
+              <Loader2 className="size-3.5 animate-spin mr-2" />
             ) : (
-              <Upload className="size-3.5 mr-1.5" />
+              <Upload className="size-3.5 mr-2" />
             )}
-            Tải lên ảnh mới
+            Tải lên
           </Button>
           {currentUrl && (
             <Button
@@ -360,10 +458,9 @@ function AssetCard({
               size="icon"
               onClick={onClear}
               disabled={pending}
-              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/20"
-              aria-label="Xoá"
+              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-xl transition-all border border-transparent hover:border-red-500/20"
             >
-              <Trash2 className="size-3.5" />
+              <Trash2 className="size-4" />
             </Button>
           )}
         </div>

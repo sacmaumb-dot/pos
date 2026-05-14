@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import {
   Card,
   CardContent,
@@ -70,7 +70,7 @@ export default async function SalesPage({
 
   const [sales, tickets] = await Promise.all([
     wantSale
-      ? (await getTenantPrismaServer()).sale.findMany({
+      ? prisma.sale.findMany({
           orderBy: { createdAt: "desc" },
           include: {
             customer: { select: { name: true, phone: true } },
@@ -80,7 +80,7 @@ export default async function SalesPage({
         })
       : Promise.resolve([]),
     wantService
-      ? (await getTenantPrismaServer()).serviceTicket.findMany({
+      ? prisma.serviceTicket.findMany({
           where: { status: "delivered" },
           orderBy: { deliveredAt: "desc" },
           include: {

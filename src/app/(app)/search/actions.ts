@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 
 export type SearchHit = {
@@ -22,7 +22,7 @@ export async function globalSearch(query: string): Promise<{
   if (q.length < 2) return { ok: true, hits: [] };
 
   const [tickets, sales, customers, products] = await Promise.all([
-    (await getTenantPrismaServer()).serviceTicket.findMany({
+    prisma.serviceTicket.findMany({
       where: {
         OR: [
           { code: { contains: q } },
@@ -37,7 +37,7 @@ export async function globalSearch(query: string): Promise<{
       take: 5,
       include: { customer: { select: { name: true, phone: true } } },
     }),
-    (await getTenantPrismaServer()).sale.findMany({
+    prisma.sale.findMany({
       where: {
         OR: [
           { code: { contains: q } },
@@ -49,7 +49,7 @@ export async function globalSearch(query: string): Promise<{
       take: 5,
       include: { customer: { select: { name: true, phone: true } } },
     }),
-    (await getTenantPrismaServer()).customer.findMany({
+    prisma.customer.findMany({
       where: {
         OR: [
           { name: { contains: q } },
@@ -61,7 +61,7 @@ export async function globalSearch(query: string): Promise<{
       orderBy: { name: "asc" },
       take: 5,
     }),
-    (await getTenantPrismaServer()).product.findMany({
+    prisma.product.findMany({
       where: {
         isActive: true,
         OR: [

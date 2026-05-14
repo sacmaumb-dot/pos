@@ -57,14 +57,12 @@ export function AppHeader({
   shopName,
   shopTagline,
   logoUrl,
-  trialDaysLeft,
 }: {
   user: SessionUser;
   pendingTickets: PendingTicket[];
   shopName: string;
   shopTagline: string;
   logoUrl: string | null;
-  trialDaysLeft: number | null;
 }) {
   const [pendingQ, setPendingQ] = useState("");
   const filteredPending = useMemo(() => {
@@ -131,17 +129,6 @@ export function AppHeader({
 
       <div className="flex-1" />
 
-      {trialDaysLeft !== null && trialDaysLeft <= 3 && (
-        <Link 
-          href="/settings/subscription" 
-          className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 hover:bg-amber-500/20 transition-all mr-2 group"
-        >
-          <AlertTriangle className="size-3.5 group-hover:scale-110 transition-transform" />
-          <span className="text-[11px] font-bold">
-            Dùng thử còn {trialDaysLeft} ngày. Nâng cấp ngay!
-          </span>
-        </Link>
-      )}
 
       <GlobalSearch />
 

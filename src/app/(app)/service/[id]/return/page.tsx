@@ -1,12 +1,10 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { formatVND, formatDateTime } from "@/lib/format";
 import {
   PrintReceiptShell,
-  ReceiptHeader,
-  ReceiptSection,
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
 import { renderTemplate } from "@/lib/template-engine";
@@ -37,30 +35,30 @@ export default async function ServiceReturnPrintPage({
   if (!user) notFound();
   const settings = await getSettings();
   const size = sp.size || settings.printSize || "A4";
-  const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
+  const ticket = await prisma.serviceTicket.findUnique({
     where: { id },
     include: {
       customer: true,
       createdBy: true,
       assignedTo: true,
-      items: true,
+      items: {
+        include: { product: true }
+      },
     },
   });
   if (!ticket) notFound();
 
   const due = ticket.finalCost - ticket.paid - ticket.deposit;
 
-  const template = await (await getTenantPrismaServer()).printTemplate.findUnique({
+  const template = await prisma.printTemplate.findUnique({
     where: {
-      tenantId_slug: {
-        tenantId: user.tenantId,
-        slug: "service-return",
-      },
+      slug: "service-return",
     },
   });
 
   const templateData = {
     ten_cua_hang: settings.shopName,
+    shop_tagline: settings.shopTagline,
     dia_chi_cua_hang: settings.shopAddress || "",
     sdt_cua_hang: settings.shopPhone || "",
     ma_phieu: ticket.code,
@@ -70,10 +68,15 @@ export default async function ServiceReturnPrintPage({
     dia_chi_khach: ticket.customer.address,
     loai_may: DEVICE_LABELS[ticket.deviceType] || ticket.deviceType,
     ten_may: [ticket.deviceBrand, ticket.deviceModel].filter(Boolean).join(" "),
+    hang: ticket.deviceBrand || "",
+    model: ticket.deviceModel || "",
     imei: ticket.imei,
     giai_phap: ticket.solution,
     ngay_tra: ticket.deliveredAt ? formatDateTime(ticket.deliveredAt) : "",
     tam_tinh: ticket.finalCost,
+    tong_cong: ticket.finalCost,
+    da_dat_coc: ticket.deposit,
+    thanh_toan_lan_nay: ticket.paid,
     da_thanh_toan: ticket.paid + ticket.deposit,
     con_no: Math.max(0, due),
     ten_nhan_vien: ticket.createdBy.name,
@@ -81,7 +84,7 @@ export default async function ServiceReturnPrintPage({
     ghi_chu: ticket.note || "",
     bank_id: settings.bankId,
     bank_account: settings.bankAccount,
-    payment_method: ticket.paymentMethod || "",
+    payment_method: PAYMENT_LABELS[ticket.paymentMethod || ""] || ticket.paymentMethod || "",
     items: ticket.items.map(it => ({
       ten: it.description,
       sl: it.quantity,
@@ -92,18 +95,27 @@ export default async function ServiceReturnPrintPage({
 
   const itemsTableHtml = `
 <div style="margin: 15px 0;">
-  <div style="display: flex; font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0;">
-    <div style="flex: 1;">Nội dung</div>
-    <div style="width: 40px; text-align: right;">SL</div>
-    <div style="width: 100px; text-align: right;">Thành tiền</div>
-  </div>
-  ${ticket.items.map(it => `
-    <div style="display: flex; font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f9f9f9;">
-      <div style="flex: 1;">${it.description}</div>
-      <div style="width: 40px; text-align: right;">${it.quantity}</div>
-      <div style="width: 100px; text-align: right; font-weight: 500;">${formatVND(it.subtotal)}</div>
-    </div>
-  `).join('')}
+  <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+    <thead>
+      <tr style="border-bottom: 2px solid #000; text-align: left; font-size: 11px; text-transform: uppercase;">
+        <th style="padding: 8px 0; width: 60%; color: #000;">Nội dung</th>
+        <th style="padding: 8px 0; width: 10%; text-align: center; color: #000;">SL</th>
+        <th style="padding: 8px 0; width: 30%; text-align: right; color: #000;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ticket.items.map(it => `
+        <tr style="border-bottom: 1px dashed #ccc;">
+          <td style="padding: 10px 0;">
+            <div style="font-weight: bold; font-size: 13px; color: #000;">${it.description}</div>
+            ${it.product?.warranty ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">BH: ${it.product.warranty}T</div>` : ''}
+          </td>
+          <td style="padding: 10px 0; text-align: center; font-size: 13px;">${it.quantity}</td>
+          <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 13px;">${formatVND(it.subtotal)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
 </div>
   `.trim();
 
@@ -128,46 +140,5 @@ export default async function ServiceReturnPrintPage({
         </div>
       </PrintReceiptShell>
     </Suspense>
-  );
-}
-
-function Field({
-  label,
-  value,
-  mono,
-  wide,
-}: {
-  label: string;
-  value: string | null | undefined;
-  mono?: boolean;
-  wide?: boolean;
-}) {
-  if (!value) return wide ? null : <div />;
-  return (
-    <div className={wide ? "col-span-2" : ""}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={mono ? "font-mono" : ""}>{value}</div>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  color,
-  bold,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  bold?: boolean;
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`${color || ""} ${bold ? "font-semibold text-base" : ""}`}>
-        {value}
-      </span>
-    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import {
   Card,
   CardContent,
@@ -33,7 +33,7 @@ const CAT_GRADIENTS: Record<string, string> = {
 };
 
 export default async function CategoriesPage() {
-  const tp = await getTenantPrismaServer();
+  const tp = prisma;
   const categories = await tp.category.findMany({
     orderBy: { name: "asc" },
     include: { _count: { select: { products: true } } },

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { SelectField } from "@/components/ui/select-field";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, PackageCheck, Plus, Trash2, Search } from "lucide-react";
 import { formatVND } from "@/lib/format";
 import { printInBackground } from "@/lib/print";
@@ -372,34 +373,53 @@ export function ReturnDialog({
             />
           </div>
 
-          <div className="rounded-md border bg-muted/20 p-3 space-y-1.5 text-sm">
-            <Row label="Tổng dịch vụ trên phiếu" value={formatVND(existingTotal)} />
+          <div className="rounded-2xl border border-border/80 bg-slate-50/50 p-5 space-y-3.5">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground font-medium">Tổng dịch vụ trên phiếu</span>
+              <span className="font-bold text-slate-700">{formatVND(existingTotal)}</span>
+            </div>
             {extrasTotal > 0 && (
-              <Row label="Phát sinh" value={formatVND(extrasTotal)} />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-medium">Phát sinh thêm</span>
+                <span className="font-bold text-slate-700">{formatVND(extrasTotal)}</span>
+              </div>
             )}
-            <Separator />
-            <Row label="Tổng chi phí" value={formatVND(finalCost)} bold />
-            {deposit > 0 && (
-              <Row
-                label="Đặt cọc"
-                value={`-${formatVND(deposit)}`}
-                color="text-emerald-600"
-              />
-            )}
-            {initialPaid > 0 && (
-              <Row
-                label="Đã thanh toán trước"
-                value={`-${formatVND(initialPaid)}`}
-                color="text-emerald-600"
-              />
-            )}
-            <Separator />
-            <Row
-              label="Còn phải thu"
-              value={formatVND(due)}
-              color={due > 0 ? "text-destructive" : "text-emerald-600"}
-              bold
-            />
+            <Separator className="bg-slate-200/60" />
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-900">Tổng chi phí cuối</span>
+              <span className="text-lg font-black text-slate-900">{formatVND(finalCost)}</span>
+            </div>
+            
+            <div className="space-y-2 pt-1">
+              {deposit > 0 && (
+                <div className="flex justify-between items-center text-[13px] bg-emerald-50/50 px-3 py-1.5 rounded-lg border border-emerald-100/50">
+                  <span className="text-emerald-700 font-medium">Đã đặt cọc</span>
+                  <span className="font-bold text-emerald-700">-{formatVND(deposit)}</span>
+                </div>
+              )}
+              {initialPaid > 0 && (
+                <div className="flex justify-between items-center text-[13px] bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100/50">
+                  <span className="text-blue-700 font-medium">Đã thanh toán trước</span>
+                  <span className="font-bold text-blue-700">-{formatVND(initialPaid)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-dashed border-slate-300">
+               <div className="flex justify-between items-center">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary/70">Số tiền cần thu</span>
+                    <span className="text-2xl font-black text-primary tracking-tight">
+                       {formatVND(due)}
+                    </span>
+                  </div>
+                  {due === 0 && (
+                    <Badge className="bg-emerald-500 hover:bg-emerald-500 text-white border-none px-3 py-1 rounded-full font-bold">
+                       ĐÃ ĐỦ
+                    </Badge>
+                  )}
+               </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

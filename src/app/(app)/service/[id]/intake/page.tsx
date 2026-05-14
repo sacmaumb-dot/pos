@@ -1,12 +1,10 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { formatVND, formatDateTime } from "@/lib/format";
 import {
   PrintReceiptShell,
-  ReceiptHeader,
-  ReceiptSection,
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
 import { renderTemplate } from "@/lib/template-engine";
@@ -17,6 +15,11 @@ const DEVICE_LABELS: Record<string, string> = {
   laptop: "Laptop",
   tablet: "Máy tính bảng",
   other: "Khác",
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
 };
 
 export default async function ServiceIntakePrintPage({
@@ -32,27 +35,27 @@ export default async function ServiceIntakePrintPage({
   if (!user) notFound();
   const settings = await getSettings();
   const size = sp.size || settings.printSize || "A4";
-  const ticket = await (await getTenantPrismaServer()).serviceTicket.findUnique({
+  const ticket = await prisma.serviceTicket.findUnique({
     where: { id },
     include: {
       customer: true,
       createdBy: true,
-      items: true,
+      items: {
+        include: { product: true }
+      },
     },
   });
   if (!ticket) notFound();
 
-  const template = await (await getTenantPrismaServer()).printTemplate.findUnique({
+  const template = await prisma.printTemplate.findUnique({
     where: {
-      tenantId_slug: {
-        tenantId: user.tenantId,
-        slug: "service-intake",
-      },
+      slug: "service-intake",
     },
   });
 
   const templateData = {
     ten_cua_hang: settings.shopName,
+    shop_tagline: settings.shopTagline,
     dia_chi_cua_hang: settings.shopAddress || "",
     sdt_cua_hang: settings.shopPhone || "",
     ma_phieu: ticket.code,
@@ -62,17 +65,20 @@ export default async function ServiceIntakePrintPage({
     dia_chi_khach: ticket.customer.address,
     loai_may: DEVICE_LABELS[ticket.deviceType] || ticket.deviceType,
     ten_may: [ticket.deviceBrand, ticket.deviceModel].filter(Boolean).join(" "),
+    hang: ticket.deviceBrand || "",
+    model: ticket.deviceModel || "",
     imei: ticket.imei,
     tinh_trang: ticket.appearance,
     loi_yeu_cau: ticket.problem,
     hen_tra: ticket.promisedAt ? formatDateTime(ticket.promisedAt) : "",
     tam_tinh: ticket.estimatedCost,
     da_thanh_toan: ticket.deposit,
+    da_dat_coc: ticket.deposit,
     ten_nhan_vien: ticket.createdBy.name,
     ghi_chu: ticket.note || "",
     bank_id: settings.bankId,
     bank_account: settings.bankAccount,
-    payment_method: ticket.paymentMethod || "",
+    payment_method: PAYMENT_LABELS[ticket.paymentMethod || ""] || ticket.paymentMethod || "",
     items: ticket.items.map(it => ({
       ten: it.description,
       sl: it.quantity,
@@ -83,18 +89,27 @@ export default async function ServiceIntakePrintPage({
 
   const itemsTableHtml = `
 <div style="margin: 15px 0;">
-  <div style="display: flex; font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0;">
-    <div style="flex: 1;">Nội dung</div>
-    <div style="width: 40px; text-align: right;">SL</div>
-    <div style="width: 100px; text-align: right;">Thành tiền</div>
-  </div>
-  ${ticket.items.map(it => `
-    <div style="display: flex; font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f9f9f9;">
-      <div style="flex: 1;">${it.description}</div>
-      <div style="width: 40px; text-align: right;">${it.quantity}</div>
-      <div style="width: 100px; text-align: right; font-weight: 500;">${formatVND(it.subtotal)}</div>
-    </div>
-  `).join('')}
+  <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+    <thead>
+      <tr style="border-bottom: 2px solid #000; text-align: left; font-size: 11px; text-transform: uppercase;">
+        <th style="padding: 8px 0; width: 60%; color: #000;">Nội dung</th>
+        <th style="padding: 8px 0; width: 10%; text-align: center; color: #000;">SL</th>
+        <th style="padding: 8px 0; width: 30%; text-align: right; color: #000;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ticket.items.map(it => `
+        <tr style="border-bottom: 1px dashed #ccc;">
+          <td style="padding: 10px 0;">
+            <div style="font-weight: bold; font-size: 13px; color: #000;">${it.description}</div>
+            ${it.product?.warranty ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">BH: ${it.product.warranty}T</div>` : ''}
+          </td>
+          <td style="padding: 10px 0; text-align: center; font-size: 13px;">${it.quantity}</td>
+          <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 13px;">${formatVND(it.subtotal)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
 </div>
   `.trim();
 
@@ -119,25 +134,5 @@ export default async function ServiceIntakePrintPage({
         </div>
       </PrintReceiptShell>
     </Suspense>
-  );
-}
-
-function Field({
-  label,
-  value,
-  mono,
-  wide,
-}: {
-  label: string;
-  value: string | null | undefined;
-  mono?: boolean;
-  wide?: boolean;
-}) {
-  if (!value) return wide ? null : <div />;
-  return (
-    <div className={wide ? "col-span-2" : ""}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={mono ? "font-mono" : ""}>{value}</div>
-    </div>
   );
 }

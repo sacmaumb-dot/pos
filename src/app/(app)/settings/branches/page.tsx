@@ -1,24 +1,19 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Store, MapPin, Phone, Clock, Plus, MoreHorizontal, ShieldCheck } from "lucide-react";
-import { getPlan } from "@/lib/plans";
+import { Store, MapPin, Phone, Plus, MoreHorizontal } from "lucide-react";
 
 export default async function BranchesPage() {
   const session = await getSession();
   if (!session || session.role !== "admin") redirect("/");
 
-  const prisma = await getTenantPrismaServer();
-  const tenant = await prisma.tenant.findUnique({ where: { id: session.tenantId } });
   const branches = await prisma.branch.findMany({
     include: { _count: { select: { users: true, sales: true } } },
     orderBy: { isMain: "desc" }
   });
-
-  const plan = getPlan(tenant?.subscriptionPlan || "trial");
 
   return (
     <div className="space-y-8 pb-12">
@@ -34,19 +29,9 @@ export default async function BranchesPage() {
           </p>
         </div>
         <div className="relative z-10 flex items-center gap-4">
-           <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gói hiện tại</p>
-              <p className="font-bold text-primary">{plan.name}</p>
-           </div>
-           {branches.length < plan.maxBranches ? (
-             <Button className="rounded-xl font-bold px-6">
-                <Plus className="mr-2 size-4" /> Thêm chi nhánh
-             </Button>
-           ) : (
-             <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 py-2 px-4 rounded-xl">
-                Đã đạt giới hạn chi nhánh
-             </Badge>
-           )}
+           <Button className="rounded-xl font-bold px-6">
+              <Plus className="mr-2 size-4" /> Thêm chi nhánh
+           </Button>
         </div>
       </div>
 

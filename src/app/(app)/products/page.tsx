@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import {
   Card,
@@ -66,25 +66,25 @@ export default async function ProductsPage({
 
   const [products, categories, totalProducts, lowStockCount, allActive] =
     await Promise.all([
-      (await getTenantPrismaServer()).product.findMany({
+      prisma.product.findMany({
         where,
         orderBy: { name: "asc" },
         include: { category: true },
         take: 200,
       }),
-      (await getTenantPrismaServer()).category.findMany({
+      prisma.category.findMany({
         orderBy: { name: "asc" },
         include: { _count: { select: { products: true } } },
       }),
-      (await getTenantPrismaServer()).product.count({ where: { isActive: true } }),
-      (await getTenantPrismaServer()).product.count({
+      prisma.product.count({ where: { isActive: true } }),
+      prisma.product.count({
         where: {
           isActive: true,
           stock: { lte: 5 },
           category: { type: { not: "service" } },
         },
       }),
-      (await getTenantPrismaServer()).product.findMany({
+      prisma.product.findMany({
         where: { isActive: true },
         select: { stock: true, costPrice: true, category: true },
       }),

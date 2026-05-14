@@ -36,7 +36,7 @@ export function LoginForm() {
           }
         }
 
-        const from = searchParams.get("from") || "/dashboard";
+        const from = searchParams.get("from") || "/pos";
         
         // Handle subdomain redirection if not currently on the correct subdomain
         const currentHost = window.location.host;

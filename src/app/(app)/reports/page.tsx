@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import {
   Card,
   CardContent,
@@ -102,12 +102,12 @@ async function ShiftsTab({ date }: { date: string }) {
   end.setDate(end.getDate() + 1);
 
   const [sales, tickets, users] = await Promise.all([
-    (await getTenantPrismaServer()).sale.findMany({
+    prisma.sale.findMany({
       where: { createdAt: { gte: start, lt: end }, status: "paid" },
       include: { customer: true, user: true },
       orderBy: { createdAt: "asc" },
     }),
-    (await getTenantPrismaServer()).serviceTicket.findMany({
+    prisma.serviceTicket.findMany({
       where: {
         deliveredAt: { gte: start, lt: end },
         status: "delivered",
@@ -115,7 +115,7 @@ async function ShiftsTab({ date }: { date: string }) {
       include: { customer: true, createdBy: true },
       orderBy: { deliveredAt: "asc" },
     }),
-    (await getTenantPrismaServer()).user.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   const userMap = new Map(users.map((u) => [u.id, u]));
@@ -231,16 +231,16 @@ async function OverviewTab() {
     topProducts,
     paymentBreakdown,
   ] = await Promise.all([
-    (await getTenantPrismaServer()).sale.aggregate({
+    prisma.sale.aggregate({
       where: { createdAt: { gte: today }, status: "paid" },
       _sum: { total: true },
     }),
-    (await getTenantPrismaServer()).sale.aggregate({
+    prisma.sale.aggregate({
       where: { createdAt: { gte: startOfMonth }, status: "paid" },
       _sum: { total: true },
       _count: true,
     }),
-    (await getTenantPrismaServer()).serviceTicket.aggregate({
+    prisma.serviceTicket.aggregate({
       where: {
         deliveredAt: { gte: startOfMonth },
         status: "delivered",
@@ -248,19 +248,19 @@ async function OverviewTab() {
       _sum: { finalCost: true },
       _count: true,
     }),
-    (await getTenantPrismaServer()).sale.findMany({
+    prisma.sale.findMany({
       where: { createdAt: { gte: last30 }, status: "paid" },
       orderBy: { createdAt: "asc" },
       select: { createdAt: true, total: true },
     }),
-    (await getTenantPrismaServer()).saleItem.groupBy({
+    prisma.saleItem.groupBy({
       by: ["productId"],
       where: { sale: { createdAt: { gte: startOfMonth }, status: "paid" } },
       _sum: { quantity: true, subtotal: true },
       orderBy: { _sum: { subtotal: "desc" } },
       take: 10,
     }),
-    (await getTenantPrismaServer()).sale.groupBy({
+    prisma.sale.groupBy({
       by: ["paymentMethod"],
       where: { createdAt: { gte: startOfMonth }, status: "paid" },
       _sum: { total: true },
@@ -269,7 +269,7 @@ async function OverviewTab() {
   ]);
 
   const productIds = topProducts.map((p) => p.productId);
-  const productDetails = await (await getTenantPrismaServer()).product.findMany({
+  const productDetails = await prisma.product.findMany({
     where: { id: { in: productIds } },
   });
   const productMap = Object.fromEntries(productDetails.map((p) => [p.id, p]));

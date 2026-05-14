@@ -2,9 +2,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getTenantPrismaServer } from "@/lib/prisma";
-import { headers } from "next/headers";
-import { getSettings, getTenantFromHeader } from "@/lib/settings";
+import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -16,49 +15,22 @@ export default async function AppLayout({
   const user = await getSession();
   if (!user) redirect("/login");
 
-  // Multi-tenant SaaS subscription check
-  const headersList = await headers();
-  const slug = headersList.get("x-tenant-slug");
-  const tenant = await getTenantFromHeader();
-
-  // If a subdomain is used but no tenant is found, it's an invalid subdomain
-  if (slug && !tenant) {
-    const isLocalhost = headersList.get("host")?.includes("localhost");
-    const rootDomain = isLocalhost ? "http://localhost:3000" : "https://mypos.vn";
-    redirect(rootDomain);
-  }
-
-  // GLOBAL MAINTENANCE & BLOCKED TENANT CHECK
-  const systemSettings = await (await import("@/lib/prisma")).prisma.systemSetting.findUnique({ where: { id: "global" } });
+  // Global Maintenance check
+  const systemSettings = await prisma.systemSetting.findUnique({ where: { id: "global" } });
   if (systemSettings?.maintenanceMode && !user.isSuperAdmin) {
-    redirect("/maintenance");
-  }
-
-  if (tenant && !tenant.active && !user.isSuperAdmin) {
-    redirect("/blocked");
-  }
-
-  let trialDaysLeft: number | null = null;
-  if (tenant) {
-    const now = new Date();
-    const expiry = new Date(tenant.trialExpiresAt);
-    const isTrialExpired = now > expiry;
-    const hasActiveSubscription = tenant.subscriptionExpiresAt 
-      ? now <= new Date(tenant.subscriptionExpiresAt) 
-      : false;
-
-    if (isTrialExpired && !hasActiveSubscription) {
-      redirect("/expired");
-    }
-
-    if (tenant.subscriptionPlan === "trial") {
-      trialDaysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    }
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Hệ thống đang bảo trì</h1>
+          <p className="text-slate-500">Vui lòng quay lại sau.</p>
+        </div>
+      </div>
+    );
   }
 
   const settings = await getSettings();
 
-  const tickets = await (await getTenantPrismaServer()).serviceTicket.findMany({
+  const tickets = await prisma.serviceTicket.findMany({
     where: {
       status: { notIn: ["delivered", "cancelled"] },
     },
@@ -86,7 +58,6 @@ export default async function AppLayout({
           shopName={settings.shopName}
           shopTagline={settings.shopTagline}
           logoUrl={settings.logoUrl}
-          trialDaysLeft={trialDaysLeft}
         />
         <main className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4 sm:p-5 max-w-[1600px] w-full mx-auto">

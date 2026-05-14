@@ -91,7 +91,7 @@ export function renderTemplate(
   const isTransfer = payMethod === "transfer" || payMethod === "chuyển khoản";
 
   if (isTransfer && data.bank_id && data.bank_account) {
-    const amount = data.tong_cong || 0;
+    const amount = data.con_no || data.tong_cong || 0;
     const code = data.ma_phieu || "";
     const addInfo = encodeURIComponent(`THANH TOAN ${code}`);
     const qrUrl = `https://img.vietqr.io/image/${data.bank_id}-${data.bank_account}-qr_only.png?amount=${amount}&addInfo=${addInfo}`;
@@ -101,11 +101,27 @@ export function renderTemplate(
   <div style="font-size: 10px; color: #555; margin-top: 5px; font-family: sans-serif; font-weight: bold;">QUÉT MÃ QR THANH TOÁN CHUYỂN KHOẢN</div>
 </div>
     `.trim();
+    // Inject into data so [if:qr] works
+    data.qr = qrHtml;
+    data.is_transfer = true;
   }
 
-  // 2. Handle Regular Placeholders
+  // 2. Handle Conditional Blocks [if:key]...[/if]
+  // This allows hiding sections if the data is missing or zero
+  const condRegex = /\[if:(\w+)\]([\s\S]*?)\[\/if\]/gi;
+  result = result.replace(condRegex, (match, key, content) => {
+    const val = data[key];
+    // Show content if value exists, is not false, is not 0, and is not empty string
+    if (val && val !== 0 && val !== "0" && val !== "") {
+      return content;
+    }
+    return "";
+  });
+
+  // 3. Handle Regular Placeholders
   const placeholders: Record<string, string> = {
     "{ten_cua_hang}": data.ten_cua_hang || "",
+    "{shop_tagline}": data.shop_tagline || "",
     "{dia_chi_cua_hang}": data.dia_chi_cua_hang || "",
     "{sdt_cua_hang}": data.sdt_cua_hang || "",
     "{ma_phieu}": data.ma_phieu || "",
@@ -119,8 +135,10 @@ export function renderTemplate(
     
     "{tam_tinh}": formatVND(data.tam_tinh || 0),
     "{chiet_khau}": formatVND(data.chiet_khau || 0),
-    "{tong_cong}": formatVND(data.tong_cong || 0),
+    "{tong_cong}": formatVND(data.tong_cong || data.tam_tinh || 0),
     "{da_thanh_toan}": formatVND(data.da_thanh_toan || 0),
+    "{da_dat_coc}": formatVND(data.da_dat_coc || 0),
+    "{thanh_toan_lan_nay}": formatVND(data.thanh_toan_lan_nay || 0),
     "{con_no}": formatVND(data.con_no || 0),
     
     "{ten_nhan_vien}": data.ten_nhan_vien || "",
@@ -128,6 +146,7 @@ export function renderTemplate(
     "{loai_may}": data.loai_may || "",
     "{ten_may}": data.ten_may || "",
     "{hang}": data.hang || "",
+    "{model}": data.model || "",
     "{imei}": data.imei || "",
     "{tinh_trang}": data.tinh_trang || "",
     "{loi_yeu_cau}": data.loi_yeu_cau || "",
@@ -138,9 +157,10 @@ export function renderTemplate(
     
     "{ghi_chu}": data.ghi_chu || "",
     "{sanpham}": itemsTableHtml,
-    "{tongtien}": formatVND(data.tong_cong || 0),
+    "{tongtien}": formatVND(data.tong_cong || data.tam_tinh || 0),
     "{chietkhau}": formatVND(data.chiet_khau || 0),
-    "{tong}": formatVND(data.tong_cong || 0),
+    "{tong}": formatVND(data.tong_cong || data.tam_tinh || 0),
+    "{payment_method}": data.payment_method || data.paymentMethod || "",
     "{qr}": qrHtml,
   };
 

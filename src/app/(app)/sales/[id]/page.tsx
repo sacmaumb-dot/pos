@@ -1,11 +1,9 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { formatVND, formatDateTime } from "@/lib/format";
 import {
   PrintReceiptShell,
-  ReceiptHeader,
-  ReceiptSection,
 } from "@/components/print-receipt-shell";
 import { getSettings } from "@/lib/settings";
 import { renderTemplate } from "@/lib/template-engine";
@@ -13,9 +11,7 @@ import { sanitizeTemplateHtml } from "@/lib/sanitize-html";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
-  card: "Thẻ ngân hàng",
   transfer: "Chuyển khoản",
-  wallet: "Ví điện tử",
 };
 
 export default async function SaleDetailPage({
@@ -32,7 +28,7 @@ export default async function SaleDetailPage({
   const settings = await getSettings();
   const size = sp.size || settings.printSize || "A4";
 
-  const sale = await (await getTenantPrismaServer()).sale.findUnique({
+  const sale = await prisma.sale.findUnique({
     where: { id },
     include: {
       customer: true,
@@ -42,17 +38,15 @@ export default async function SaleDetailPage({
   });
   if (!sale) notFound();
 
-  const template = await (await getTenantPrismaServer()).printTemplate.findUnique({
+  const template = await prisma.printTemplate.findUnique({
     where: {
-      tenantId_slug: {
-        tenantId: user.tenantId,
-        slug: "sale-receipt",
-      },
+      slug: "sale-receipt",
     },
   });
 
   const templateData = {
     ten_cua_hang: settings.shopName,
+    shop_tagline: settings.shopTagline,
     dia_chi_cua_hang: settings.shopAddress || "",
     sdt_cua_hang: settings.shopPhone || "",
     ma_phieu: sale.code,
@@ -69,7 +63,7 @@ export default async function SaleDetailPage({
     ghi_chu: sale.note || "",
     bank_id: settings.bankId,
     bank_account: settings.bankAccount,
-    payment_method: sale.paymentMethod,
+    payment_method: PAYMENT_LABELS[sale.paymentMethod || ""] || sale.paymentMethod || "",
     items: sale.items.map(item => ({
       ten: item.product.name,
       sl: item.quantity,
@@ -81,21 +75,28 @@ export default async function SaleDetailPage({
 
   const itemsTableHtml = `
 <div style="margin: 15px 0;">
-  <div style="display: flex; font-size: 11px; font-weight: bold; color: #888; text-transform: uppercase; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0;">
-    <div style="flex: 1;">Nội dung</div>
-    <div style="width: 40px; text-align: right;">SL</div>
-    <div style="width: 100px; text-align: right;">Thành tiền</div>
-  </div>
-  ${sale.items.map(item => `
-    <div style="display: flex; font-size: 13px; padding: 10px 0; border-bottom: 1px solid #f9f9f9;">
-      <div style="flex: 1;">
-        <div style="font-weight: 500;">${item.product.name}</div>
-        ${item.imei ? `<div style="font-size: 10px; color: #888;">IMEI: ${item.imei}</div>` : ''}
-      </div>
-      <div style="width: 40px; text-align: right;">${item.quantity}</div>
-      <div style="width: 100px; text-align: right; font-weight: 500;">${formatVND(item.subtotal)}</div>
-    </div>
-  `).join('')}
+  <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
+    <thead>
+      <tr style="border-bottom: 2px solid #000; text-align: left; font-size: 11px; text-transform: uppercase;">
+        <th style="padding: 8px 0; width: 60%; color: #000;">Sản phẩm</th>
+        <th style="padding: 8px 0; width: 10%; text-align: center; color: #000;">SL</th>
+        <th style="padding: 8px 0; width: 30%; text-align: right; color: #000;">Thành tiền</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sale.items.map(item => `
+        <tr style="border-bottom: 1px dashed #ccc;">
+          <td style="padding: 10px 0;">
+            <div style="font-weight: bold; font-size: 13px; color: #000;">${item.product.name}</div>
+            ${item.product.warranty > 0 ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">BH: ${item.product.warranty}T</div>` : ''}
+            ${item.imei ? `<div style="font-size: 10px; color: #888; margin-top: 1px; font-family: monospace;">IMEI: ${item.imei}</div>` : ''}
+          </td>
+          <td style="padding: 10px 0; text-align: center; font-size: 13px;">${item.quantity}</td>
+          <td style="padding: 10px 0; text-align: right; font-weight: bold; font-size: 13px;">${formatVND(item.subtotal)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
 </div>
   `.trim();
 
@@ -118,28 +119,5 @@ export default async function SaleDetailPage({
         />
       </div>
     </PrintReceiptShell>
-  );
-}
-
-function Row({
-  label,
-  value,
-  color,
-  bold,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  bold?: boolean;
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className={bold ? "font-semibold" : "text-muted-foreground"}>
-        {label}
-      </span>
-      <span className={`${bold ? "font-bold" : ""} ${color || ""}`}>
-        {value}
-      </span>
-    </div>
   );
 }

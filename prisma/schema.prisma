@@ -1,5 +1,5 @@
-// Schema for Laptop & Phone Shop Management - Multi-tenant SaaS Version
-// Modules: Sales (POS), Repair/Service, Inventory, Customers, Users, Tenant/Subscription
+// Schema for Laptop & Phone Shop Management - Personal Version
+// Modules: Sales (POS), Repair/Service, Inventory, Customers, Users
 
 generator client {
   provider = "prisma-client-js"
@@ -7,49 +7,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 // ============================================
-// TENANTS / SAAS SUBSCRIBERS
+// BRANCHES
 // ============================================
-model Tenant {
-  id     String  @id @default(cuid())
-  slug   String  @unique // Subdomain prefix (e.g. apple-care)
-  name   String
-  active Boolean @default(true)
-
-  // SaaS Subscription & 7-Day Trial
-  trialExpiresAt        DateTime
-  subscriptionPlan      String    @default("trial") // trial | basic | premium
-  subscriptionExpiresAt DateTime?
-
-  // Atomic per-tenant counters for human-readable codes (HDxxxxx / SCxxxxx
-  // / KHxxxxx). Incremented via `update { increment: 1 }` so concurrent
-  // sales/tickets/customers never share a code. On first use after this
-  // migration, the counters are rolled forward past any pre-existing
-  // codes — see src/lib/code-sequence.ts.
-  lastSaleNumber     Int @default(0)
-  lastTicketNumber   Int @default(0)
-  lastCustomerNumber Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users          User[]
-  settings       AppSetting[]
-  customers      Customer[]
-  categories     Category[]
-  products       Product[]
-  sales          Sale[]
-  tickets        ServiceTicket[]
-  templates      PrintTemplate[]
-  stockMovements StockMovement[]
-  sessions       Session[]
-  branches       Branch[]
-}
-
 model Branch {
   id        String   @id @default(cuid())
   name      String
@@ -59,24 +23,19 @@ model Branch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   users          User[]
   sales          Sale[]
   serviceTickets ServiceTicket[]
   stockMovements StockMovement[]
   productStocks  ProductBranchStock[]
   sessions       Session[]
-
-  @@index([tenantId])
 }
 
 // ============================================
 // SETTINGS / APP CONFIG
 // ============================================
 model AppSetting {
-  id              String   @id @default(cuid())
+  id              String   @id @default("default")
   shopName        String   @default("TechShop")
   siteTitle       String   @default("TechShop - Quản lý cửa hàng Laptop & Điện thoại")
   shopTagline     String   @default("Laptop & Điện thoại")
@@ -91,8 +50,10 @@ model AppSetting {
   printSize       String   @default("A4") // A4 | 80mm
   updatedAt       DateTime @updatedAt
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Atomic counters for human-readable codes
+  lastSaleNumber     Int @default(0)
+  lastTicketNumber   Int @default(0)
+  lastCustomerNumber Int @default(0)
 }
 
 // ============================================
@@ -113,9 +74,6 @@ model User {
   lastLoginAt DateTime?
   lastIp      String?
   userAgent   String?
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
@@ -176,13 +134,10 @@ model Session {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
-  @@index([tenantId, userId])
+  @@index([userId])
 }
 
 // ============================================
@@ -190,23 +145,17 @@ model Session {
 // ============================================
 model Customer {
   id        String   @id @default(cuid())
-  code      String // KH001 (Unique per Tenant)
+  code      String   @unique // KH001
   name      String
-  phone     String // (Unique per Tenant)
+  phone     String   @unique
   email     String?
   address   String?
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   sales          Sale[]
   serviceTickets ServiceTicket[]
-
-  @@unique([tenantId, code])
-  @@unique([tenantId, phone])
 }
 
 // ============================================
@@ -215,21 +164,16 @@ model Customer {
 model Category {
   id        String    @id @default(cuid())
   name      String
-  slug      String
+  slug      String    @unique
   type      String // laptop | phone | accessory | service
   skuPrefix String    @default("") // LT, DT, PK, DV
-  icon      String    @default("") // lucide icon name: laptop, smartphone, wrench, headphones, etc.
+  icon      String    @default("") // lucide icon name
   products  Product[]
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, slug])
 }
 
 model Product {
   id          String   @id @default(cuid())
-  sku         String // Unique per Tenant
+  sku         String   @unique
   name        String
   brand       String? // Apple, Dell, Samsung...
   description String?
@@ -245,29 +189,24 @@ model Product {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   saleItems     SaleItem[]
   serviceItems  ServiceItem[]
   movements     StockMovement[]
   productStocks ProductBranchStock[]
-
-  @@unique([tenantId, sku])
 }
 
 // ============================================
-// STOCK MOVEMENTS (Nhập / Xuất / Kiểm kho)
+// STOCK MOVEMENTS
 // ============================================
 model StockMovement {
   id        String   @id @default(cuid())
   type      String // in | out | adjust
-  quantity  Int // delta — positive for in, negative for out, signed for adjust
+  quantity  Int // delta
   before    Int // stock before
   after     Int // stock after
-  unitCost  Float    @default(0) // for "in" — giá nhập
-  reason    String? // mua hàng / xuất sửa chữa / kiểm kê thiếu...
-  reference String? // mã NCC / mã phiếu liên quan
+  unitCost  Float    @default(0)
+  reason    String?
+  reference String?
   createdAt DateTime @default(now())
 
   productId String
@@ -275,9 +214,6 @@ model StockMovement {
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
@@ -290,14 +226,14 @@ model StockMovement {
 // ============================================
 model Sale {
   id            String   @id @default(cuid())
-  code          String // HD20240001 (Unique per Tenant)
+  code          String   @unique // HD20240001
   subtotal      Float    @default(0)
   discount      Float    @default(0)
   tax           Float    @default(0)
   total         Float    @default(0)
   paid          Float    @default(0)
-  paymentMethod String   @default("cash") // cash | card | transfer | wallet
-  status        String   @default("paid") // paid | pending | cancelled
+  paymentMethod String   @default("cash")
+  status        String   @default("paid")
   note          String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -308,15 +244,10 @@ model Sale {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   items SaleItem[]
-
-  @@unique([tenantId, code])
 }
 
 model SaleItem {
@@ -325,7 +256,7 @@ model SaleItem {
   unitPrice Float
   discount  Float   @default(0)
   subtotal  Float
-  imei      String? // IMEI / serial cho phone/laptop bán ra
+  imei      String?
   note      String?
 
   saleId String
@@ -340,25 +271,25 @@ model SaleItem {
 // ============================================
 model ServiceTicket {
   id            String    @id @default(cuid())
-  code          String // SC20240001 (Unique per Tenant)
-  deviceType    String // laptop | phone | tablet | other
-  deviceBrand   String? // Apple, Dell...
-  deviceModel   String? // MacBook Pro 14, iPhone 15...
-  imei          String? // IMEI / serial
-  accessories   String? // pin, sạc, sim... đi kèm
-  appearance    String? // trầy xước, móp...
-  problem       String // Mô tả lỗi từ khách
-  diagnosis     String? // Chẩn đoán của KTV
-  solution      String? // Giải pháp / linh kiện thay
+  code          String    @unique // SC20240001
+  deviceType    String
+  deviceBrand   String?
+  deviceModel   String?
+  imei          String?
+  accessories   String?
+  appearance    String?
+  problem       String
+  diagnosis     String?
+  solution      String?
   estimatedCost Float     @default(0)
   finalCost     Float     @default(0)
-  deposit       Float     @default(0) // cọc
+  deposit       Float     @default(0)
   paid          Float     @default(0)
-  warranty      Int       @default(0) // months on repair
-  paymentMethod String? // cash | transfer
-  status        String    @default("received") // received | diagnosing | waiting_parts | repairing | completed | delivered | cancelled
+  warranty      Int       @default(0)
+  paymentMethod String?
+  status        String    @default("received")
   receivedAt    DateTime  @default(now())
-  promisedAt    DateTime? // hẹn trả
+  promisedAt    DateTime?
   completedAt   DateTime?
   deliveredAt   DateTime?
   note          String?
@@ -374,21 +305,16 @@ model ServiceTicket {
   assignedToId String?
   assignedTo   User?   @relation("AssignedTo", fields: [assignedToId], references: [id])
 
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   items   ServiceItem[]
   history ServiceStatusHistory[]
-
-  @@unique([tenantId, code])
 }
 
 model ServiceItem {
   id          String @id @default(cuid())
-  description String // Tên linh kiện / dịch vụ
+  description String
   quantity    Int    @default(1)
   unitPrice   Float
   subtotal    Float
@@ -415,25 +341,19 @@ model ServiceStatusHistory {
 // ============================================
 model PrintTemplate {
   id        String   @id @default(cuid())
-  name      String // "Hóa đơn bán hàng", "Phiếu nhận máy", "Phiếu trả máy"
-  slug      String // "sale-receipt", "service-intake", "service-return" (Unique per Tenant)
-  content   String? // Full template layout
+  name      String
+  slug      String   @unique
+  content   String?
   updatedAt DateTime @updatedAt
-
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, slug])
 }
+
 // ============================================
 // SYSTEM SETTINGS (Global Admin)
 // ============================================
 model SystemSetting {
   id              String   @id @default("global")
-  platformName    String   @default("MyPOS SaaS")
+  platformName    String   @default("MyPOS")
   supportEmail    String   @default("support@mypos.vn")
   maintenanceMode Boolean  @default(false)
-  allowSignup     Boolean  @default(true)
-  announcement    String?  // Global announcement text
   updatedAt       DateTime @updatedAt
 }

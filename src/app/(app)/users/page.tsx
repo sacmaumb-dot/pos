@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import {
@@ -37,7 +37,6 @@ export default async function UsersPage() {
   const session = await getSession();
   if (!session || session.role !== "admin") redirect("/");
 
-  const prisma = await getTenantPrismaServer();
   const users = await prisma.user.findMany({ 
     include: { branch: true },
     orderBy: { createdAt: "desc" } 

@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma";
 import { requireSession } from "@/lib/auth";
 import {
@@ -46,7 +46,6 @@ export default async function ServicePage({
 }) {
   const sp = await searchParams;
   const session = await requireSession();
-  const tenantPrisma = await getTenantPrismaServer();
   const where: Prisma.ServiceTicketWhereInput = {};
 
   if (sp.status && sp.status !== "all") {
@@ -63,14 +62,14 @@ export default async function ServicePage({
     ];
   }
 
-  const tickets = await tenantPrisma.serviceTicket.findMany({
+  const tickets = await prisma.serviceTicket.findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: { customer: true, assignedTo: true },
     take: 200,
   });
 
-  const counts = await tenantPrisma.serviceTicket.groupBy({
+  const counts = await prisma.serviceTicket.groupBy({
     by: ["status"],
     _count: true,
   });

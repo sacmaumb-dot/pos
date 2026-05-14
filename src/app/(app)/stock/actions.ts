@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -16,9 +16,8 @@ async function recordMovement(
   type: "in" | "out" | "adjust",
   input: StockInput,
   userId: string,
-  tenantId: string,
 ) {
-  const product = await (await getTenantPrismaServer()).product.findUnique({
+  const product = await prisma.product.findUnique({
     where: { id: input.productId },
   });
   if (!product) return { ok: false as const, error: "Sản phẩm không tồn tại" };
@@ -35,12 +34,12 @@ async function recordMovement(
       error: `Tồn kho không đủ (hiện có ${before}, yêu cầu xuất ${Math.abs(delta)})`,
     };
 
-  await (await getTenantPrismaServer()).$transaction([
-    (await getTenantPrismaServer()).product.update({
+  await prisma.$transaction([
+    prisma.product.update({
       where: { id: input.productId },
       data: { stock: after },
     }),
-    (await getTenantPrismaServer()).stockMovement.create({
+    prisma.stockMovement.create({
       data: {
         type,
         quantity: delta,
@@ -51,7 +50,6 @@ async function recordMovement(
         reference: input.reference || null,
         productId: input.productId,
         userId,
-        tenantId,
       },
     }),
   ]);
@@ -64,16 +62,16 @@ async function recordMovement(
 
 export async function stockIn(input: StockInput) {
   const session = await requireSession();
-  if (!input.quantity || input.quantity <= 0)
+  if (input.quantity <= 0)
     return { ok: false as const, error: "Số lượng phải lớn hơn 0" };
-  return recordMovement("in", input, session.id, session.tenantId);
+  return recordMovement("in", input, session.id);
 }
 
 export async function stockOut(input: StockInput) {
   const session = await requireSession();
-  if (!input.quantity || input.quantity <= 0)
+  if (input.quantity <= 0)
     return { ok: false as const, error: "Số lượng phải lớn hơn 0" };
-  return recordMovement("out", input, session.id, session.tenantId);
+  return recordMovement("out", input, session.id);
 }
 
 export async function stockAdjust(input: {
@@ -84,19 +82,19 @@ export async function stockAdjust(input: {
   const session = await requireSession();
   if (input.newStock < 0)
     return { ok: false as const, error: "Tồn kho không thể âm" };
-  const product = await (await getTenantPrismaServer()).product.findUnique({
+  const product = await prisma.product.findUnique({
     where: { id: input.productId },
   });
   if (!product) return { ok: false as const, error: "Sản phẩm không tồn tại" };
   const delta = input.newStock - product.stock;
   if (delta === 0) return { ok: true as const, before: product.stock, after: product.stock };
 
-  await (await getTenantPrismaServer()).$transaction([
-    (await getTenantPrismaServer()).product.update({
+  await prisma.$transaction([
+    prisma.product.update({
       where: { id: input.productId },
       data: { stock: input.newStock },
     }),
-    (await getTenantPrismaServer()).stockMovement.create({
+    prisma.stockMovement.create({
       data: {
         type: "adjust",
         quantity: delta,
@@ -106,7 +104,6 @@ export async function stockAdjust(input: {
         reason: input.reason || "Kiểm kê",
         productId: input.productId,
         userId: session.id,
-        tenantId: session.tenantId,
       },
     }),
   ]);

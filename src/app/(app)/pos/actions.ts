@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantPrismaServer, prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { nextSaleCode, nextCustomerCode } from "@/lib/code-sequence";
@@ -40,26 +40,24 @@ export async function createSale(input: {
       if (!phone) {
         return { ok: false as const, error: "SĐT khách hàng không hợp lệ" };
       }
-      const existing = await (await getTenantPrismaServer()).customer.findFirst({ where: { phone } });
+      const existing = await prisma.customer.findFirst({ where: { phone } });
       if (existing) {
         resolvedCustomerId = existing.id;
       } else {
-        const code = await nextCustomerCode(prisma, session.tenantId);
-        const created = await (await getTenantPrismaServer()).customer.create({
+        const code = await nextCustomerCode(prisma);
+        const created = await prisma.customer.create({
           data: {
             code,
             name,
             phone,
-            tenantId: session.tenantId,
           },
         });
         resolvedCustomerId = created.id;
       }
     }
 
-    // Validate stock
     const productIds = input.items.map((i) => i.productId);
-    const products = await (await getTenantPrismaServer()).product.findMany({
+    const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
       include: { category: true },
     });
@@ -80,10 +78,8 @@ export async function createSale(input: {
     );
     const total = Math.max(0, subtotal - (input.discount || 0));
 
-    const sale = await (await getTenantPrismaServer()).$transaction(async (tx) => {
-      // Atomic per-tenant counter — see src/lib/code-sequence.ts. This
-      // replaces the previous find-max + 1 pattern which had a TOCTOU race.
-      const code = await nextSaleCode(tx, session.tenantId);
+    const sale = await prisma.$transaction(async (tx) => {
+      const code = await nextSaleCode(tx);
       const created = await tx.sale.create({
         data: {
           code,
@@ -96,7 +92,6 @@ export async function createSale(input: {
           note: input.note || null,
           customerId: resolvedCustomerId,
           userId: session.id,
-          tenantId: session.tenantId,
           items: {
             create: input.items.map((i) => ({
               productId: i.productId,
@@ -110,11 +105,6 @@ export async function createSale(input: {
         },
       });
 
-      // Reduce stock for non-service items + record a StockMovement so the
-      // stock-history page reflects the sale. We refetch each product's
-      // current stock inside the transaction so the `before` / `after`
-      // values are correct even when the same product appears in multiple
-      // cart rows.
       for (const item of input.items) {
         const cached = products.find((x) => x.id === item.productId);
         if (cached && cached.category.type !== "service") {
@@ -137,7 +127,6 @@ export async function createSale(input: {
               reference: code,
               productId: item.productId,
               userId: session.id,
-              tenantId: session.tenantId,
             },
           });
         }

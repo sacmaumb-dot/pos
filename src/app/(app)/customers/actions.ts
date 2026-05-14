@@ -1,10 +1,8 @@
 "use server";
 
-import { getTenantPrismaServer, prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { getPlan } from "@/lib/plans";
-import { getTenantFromHeader } from "@/lib/settings";
 import { nextCustomerCode } from "@/lib/code-sequence";
 
 export async function createCustomer(data: {
@@ -15,23 +13,10 @@ export async function createCustomer(data: {
   note?: string;
 }) {
   try {
-    const session = await requireSession();
-    const tenantPrisma = await getTenantPrismaServer();
-    const tenant = await getTenantFromHeader();
+    await requireSession();
     
-    if (tenant) {
-      const plan = getPlan(tenant.subscriptionPlan);
-      const count = await tenantPrisma.customer.count();
-      if (count >= plan.maxCustomers) {
-        return { ok: false as const, error: `Gói ${plan.name} giới hạn tối đa ${plan.maxCustomers} khách hàng. Vui lòng nâng cấp!` };
-      }
-    }
-
-    // Atomic per-tenant counter — replaces the previous "count + 1" pattern
-    // which produced duplicate codes after any customer was deleted (count
-    // dropped but the existing max code stayed) and under concurrent inserts.
-    const code = await nextCustomerCode(prisma, session.tenantId);
-    await (await getTenantPrismaServer()).customer.create({
+    const code = await nextCustomerCode(prisma);
+    await prisma.customer.create({
       data: {
         code,
         name: data.name,
@@ -39,7 +24,6 @@ export async function createCustomer(data: {
         email: data.email || null,
         address: data.address || null,
         note: data.note || null,
-        tenantId: session.tenantId,
       },
     });
     revalidatePath("/customers");
@@ -47,7 +31,7 @@ export async function createCustomer(data: {
   } catch (e) {
     const err = e as { code?: string };
     if (err.code === "P2002") {
-      return { ok: false as const, error: "Số điện thoại đã tồn tại" };
+      return { ok: false as const, error: "Số điện thoại hoặc mã đã tồn tại" };
     }
     console.error(e);
     return { ok: false as const, error: "Có lỗi xảy ra" };
@@ -66,7 +50,7 @@ export async function updateCustomer(
 ) {
   try {
     await requireSession();
-    await (await getTenantPrismaServer()).customer.update({
+    await prisma.customer.update({
       where: { id },
       data: {
         name: data.name,
@@ -92,7 +76,7 @@ export async function updateCustomer(
 export async function deleteCustomer(id: string) {
   try {
     await requireSession();
-    const used = await (await getTenantPrismaServer()).customer.findUnique({
+    const used = await prisma.customer.findUnique({
       where: { id },
       include: {
         sales: { select: { id: true }, take: 1 },
@@ -106,7 +90,7 @@ export async function deleteCustomer(id: string) {
         error: "Khách hàng đã có giao dịch, không thể xoá",
       };
     }
-    await (await getTenantPrismaServer()).customer.delete({ where: { id } });
+    await prisma.customer.delete({ where: { id } });
     revalidatePath("/customers");
     return { ok: true as const };
   } catch (e) {

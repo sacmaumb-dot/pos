@@ -1,6 +1,6 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
@@ -178,21 +178,12 @@ const DEFAULT_TEMPLATES = [
 
 export async function restoreDefaultTemplates() {
   try {
-    const prisma = await getTenantPrismaServer();
-    const session = await requireSession();
+    await requireSession();
     
     for (const t of DEFAULT_TEMPLATES) {
       await prisma.printTemplate.upsert({
-        where: {
-          tenantId_slug: {
-            tenantId: session.tenantId,
-            slug: t.slug
-          }
-        },
-        create: {
-          ...t,
-          tenantId: session.tenantId
-        },
+        where: { slug: t.slug },
+        create: t,
         update: {
           name: t.name,
           content: t.content
@@ -210,7 +201,6 @@ export async function restoreDefaultTemplates() {
 
 export async function updateTemplate(id: string, data: any) {
   try {
-    const prisma = await getTenantPrismaServer();
     await prisma.printTemplate.update({
       where: { id },
       data: data as any,
@@ -223,7 +213,6 @@ export async function updateTemplate(id: string, data: any) {
 }
 
 export async function getTemplates() {
-  const prisma = await getTenantPrismaServer();
   return await prisma.printTemplate.findMany({
     orderBy: { slug: "asc" },
   });

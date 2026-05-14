@@ -1,7 +1,6 @@
 import { prisma } from "./prisma";
 
 type CreateInput = {
-  tenantId: string;
   userId: string;
   type: string;
   title: string;
@@ -10,17 +9,13 @@ type CreateInput = {
 };
 
 export async function createNotification(input: CreateInput) {
-  if (!input.userId || !input.tenantId) return;
+  if (!input.userId) return;
   try {
-    // Defense-in-depth: ensure the recipient actually belongs to the caller's
-    // tenant before writing the notification. Without this check a server
-    // action could be coerced into creating a notification for a user of
-    // another tenant by passing a guessed userId.
     const user = await prisma.user.findUnique({
       where: { id: input.userId },
-      select: { tenantId: true },
+      select: { id: true },
     });
-    if (!user || user.tenantId !== input.tenantId) {
+    if (!user) {
       return;
     }
     await prisma.notification.create({
@@ -40,9 +35,8 @@ export async function createNotification(input: CreateInput) {
 export async function notifyAdmins(
   input: Omit<CreateInput, "userId">,
 ) {
-  if (!input.tenantId) return;
   const admins = await prisma.user.findMany({
-    where: { role: "admin", active: true, tenantId: input.tenantId },
+    where: { role: "admin", active: true },
     select: { id: true },
   });
   await Promise.all(

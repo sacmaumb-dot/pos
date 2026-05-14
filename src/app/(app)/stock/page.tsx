@@ -1,4 +1,4 @@
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { StockClient } from "./stock-client";
 
@@ -8,12 +8,12 @@ export default async function StockPage() {
   await requireSession();
 
   const [products, movements] = await Promise.all([
-    (await getTenantPrismaServer()).product.findMany({
+    prisma.product.findMany({
       where: { isActive: true },
       include: { category: true },
       orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
     }),
-    (await getTenantPrismaServer()).stockMovement.findMany({
+    prisma.stockMovement.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {

@@ -1,17 +1,17 @@
 "use server";
 
-import { getTenantPrismaServer } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getNotifications() {
   const user = await requireSession();
-  const items = await (await getTenantPrismaServer()).notification.findMany({
+  const items = await prisma.notification.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 30,
   });
-  const unread = await (await getTenantPrismaServer()).notification.count({
+  const unread = await prisma.notification.count({
     where: { userId: user.id, read: false },
   });
   return {
@@ -31,7 +31,7 @@ export async function getNotifications() {
 
 export async function markNotificationRead(id: string) {
   const user = await requireSession();
-  await (await getTenantPrismaServer()).notification.updateMany({
+  await prisma.notification.updateMany({
     where: { id, userId: user.id },
     data: { read: true },
   });
@@ -41,7 +41,7 @@ export async function markNotificationRead(id: string) {
 
 export async function markAllNotificationsRead() {
   const user = await requireSession();
-  await (await getTenantPrismaServer()).notification.updateMany({
+  await prisma.notification.updateMany({
     where: { userId: user.id, read: false },
     data: { read: true },
   });
