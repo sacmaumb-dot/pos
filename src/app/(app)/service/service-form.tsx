@@ -175,36 +175,31 @@ export function ServiceForm({
         } else {
           router.push(`/service/${res.id}`);
         }
-        toast.error(res.error || "Có lỗi xảy ra");
+      } else {
+        toast.error(res.error);
       }
     });
   }
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-10">
-      {/* Left Column: Device & Service Details */}
-      <div className="lg:col-span-8 space-y-6">
-        {/* Device Information Card */}
-        <Card className="border-none shadow-xl shadow-black/5 bg-card/80 backdrop-blur-md overflow-hidden transition-all hover:shadow-black/10">
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-transparent pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-                <Wrench className="size-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-black tracking-tight uppercase">Thông tin thiết bị</CardTitle>
-                <p className="text-xs text-muted-foreground font-medium">Chi tiết về thiết bị khách hàng bàn giao</p>
-              </div>
+    <form onSubmit={submit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-10">
+      {/* Left Column */}
+      <div className="lg:col-span-8 space-y-5">
+        <Card className="shadow-sm border-border/60">
+          <CardHeader className="border-b bg-muted/5 py-4">
+            <div className="flex items-center gap-2">
+              <Wrench className="size-4 text-primary" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight">Thông tin thiết bị</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <Field label="Loại thiết bị" icon={<Wrench className="size-3.5" />}>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Loại thiết bị" required>
                 <SelectField
                   value={device.type}
                   onValueChange={(v) => setDev("type", v)}
                   options={DEVICE_TYPES}
-                  className="w-full bg-muted/30 border-muted-foreground/10 h-10 rounded-xl"
+                  className="w-full h-9"
                 />
               </Field>
               <Field label="Hãng máy" required>
@@ -212,7 +207,7 @@ export function ServiceForm({
                   value={device.brand}
                   onChange={(e) => setDev("brand", e.target.value)}
                   placeholder="Apple, Dell, Samsung..."
-                  className="bg-muted/30 border-muted-foreground/10 h-10 rounded-xl focus:ring-primary/20"
+                  className="h-9"
                   required
                 />
               </Field>
@@ -220,8 +215,8 @@ export function ServiceForm({
                 <Input
                   value={device.model}
                   onChange={(e) => setDev("model", e.target.value)}
-                  placeholder="Latitude 7470, iPhone 13..."
-                  className="bg-muted/30 border-muted-foreground/10 h-10 rounded-xl focus:ring-primary/20"
+                  placeholder="VD: iPhone 13 Pro Max..."
+                  className="h-9"
                   required
                 />
               </Field>
@@ -229,219 +224,167 @@ export function ServiceForm({
                 <Input
                   value={device.imei}
                   onChange={(e) => setDev("imei", e.target.value)}
-                  placeholder="Nhập IMEI hoặc Serial..."
-                  className="font-mono bg-muted/30 border-muted-foreground/10 h-10 rounded-xl focus:ring-primary/20"
+                  placeholder="Nhập IMEI/Serial..."
+                  className="h-9 font-mono"
                 />
               </Field>
               <Field label="Phụ kiện kèm">
                 <Input
                   value={device.accessories}
                   onChange={(e) => setDev("accessories", e.target.value)}
-                  placeholder="Sạc, cáp, túi chống sốc..."
-                  className="bg-muted/30 border-muted-foreground/10 h-10 rounded-xl focus:ring-primary/20"
+                  placeholder="Sạc, cáp, túi..."
+                  className="h-9"
                 />
               </Field>
               <Field label="Ngoại quan">
                 <Input
                   value={device.appearance}
                   onChange={(e) => setDev("appearance", e.target.value)}
-                  placeholder="Trầy nhẹ, móp góc..."
-                  className="bg-muted/30 border-muted-foreground/10 h-10 rounded-xl focus:ring-primary/20"
+                  placeholder="Trầy xước, móp..."
+                  className="h-9"
                 />
               </Field>
             </div>
-            <Field label="Tình trạng hư hỏng & Yêu cầu của khách" required>
-              <Textarea
-                value={device.problem}
-                onChange={(e) => setDev("problem", e.target.value)}
-                rows={4}
-                placeholder="Mô tả chi tiết lỗi và yêu cầu sửa chữa từ khách hàng..."
-                className="bg-muted/30 border-muted-foreground/10 rounded-xl focus:ring-primary/20 resize-none py-3"
-                required
-              />
-            </Field>
+            <div className="mt-4">
+              <Field label="Tình trạng hư hỏng & Yêu cầu của khách" required>
+                <Textarea
+                  value={device.problem}
+                  onChange={(e) => setDev("problem", e.target.value)}
+                  rows={3}
+                  placeholder="Mô tả chi tiết lỗi và yêu cầu từ khách hàng..."
+                  className="resize-none mt-1"
+                  required
+                />
+              </Field>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Service Quoting Card */}
-        <Card className="border-none shadow-xl shadow-black/5 bg-card/80 backdrop-blur-md overflow-visible transition-all hover:shadow-black/10">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent pb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-                  <ShoppingCart className="size-5" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg font-black tracking-tight uppercase">Báo giá dịch vụ</CardTitle>
-                  <p className="text-xs text-muted-foreground font-medium">Linh kiện dự kiến và tiền công sửa chữa</p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addItem}
-                className="h-9 rounded-xl px-4 font-bold border-primary/20 text-primary hover:bg-primary hover:text-white transition-all shadow-sm"
-              >
-                <Plus className="size-4 mr-1.5" />
-                Thêm dịch vụ
-              </Button>
+        <Card className="shadow-sm border-border/60 overflow-visible">
+          <CardHeader className="border-b bg-muted/5 py-4 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="size-4 text-primary" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight">Báo giá dịch vụ</CardTitle>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addItem}
+              className="h-8 gap-1"
+            >
+              <Plus className="size-3.5" />
+              Thêm dòng
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            {items.map((item, idx) => (
-              <div
-                key={item.id}
-                className="group relative grid grid-cols-12 gap-3 items-start p-4 rounded-2xl bg-muted/10 border border-transparent hover:border-primary/20 hover:bg-white transition-all"
-              >
-                <div className="col-span-12 sm:col-span-6">
-                  <ProductPickerInput
-                    products={products}
-                    value={item.description}
-                    onTextChange={(text) =>
-                      updateItem(item.id, {
-                        description: text,
-                        productId: null,
-                      })
-                    }
-                    onSelect={(p) =>
-                      updateItem(item.id, {
-                        productId: p.id,
-                        description: p.name,
-                        unitPrice: p.price,
-                      })
-                    }
-                    placeholder={
-                      idx === 0
-                        ? "Tìm linh kiện / dịch vụ..."
-                        : "Thêm hạng mục khác..."
-                    }
-                    className="bg-white border-muted-foreground/10 h-10 rounded-xl"
-                  />
-                </div>
-                <div className="col-span-4 sm:col-span-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        quantity: Number(e.target.value) || 1,
-                      })
-                    }
-                    className="bg-white border-muted-foreground/10 h-10 rounded-xl text-center font-bold"
-                  />
-                </div>
-                <div className="col-span-6 sm:col-span-3">
-                  <div className="relative">
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {items.map((item, idx) => (
+                <div key={item.id} className="grid grid-cols-12 gap-3 p-4 items-start bg-white hover:bg-muted/5 transition-colors">
+                  <div className="col-span-12 sm:col-span-6">
+                    <ProductPickerInput
+                      products={products}
+                      value={item.description}
+                      onTextChange={(text) => updateItem(item.id, { description: text, productId: null })}
+                      onSelect={(p) => updateItem(item.id, { productId: p.id, description: p.name, unitPrice: p.price })}
+                      placeholder={idx === 0 ? "Tên linh kiện / dịch vụ..." : "Hạng mục khác..."}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-4 sm:col-span-2">
                     <Input
                       type="number"
-                      min={0}
-                      step={1000}
-                      value={item.unitPrice || ""}
-                      onChange={(e) =>
-                        updateItem(item.id, {
-                          unitPrice: Number(e.target.value) || 0,
-                        })
-                      }
-                      placeholder="Đơn giá"
-                      className="bg-white border-muted-foreground/10 h-10 rounded-xl pr-10 font-bold text-primary"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) || 1 })}
+                      className="h-9 text-center"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground opacity-50 uppercase">đ</span>
+                  </div>
+                  <div className="col-span-6 sm:col-span-3">
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={item.unitPrice || ""}
+                        onChange={(e) => updateItem(item.id, { unitPrice: Number(e.target.value) || 0 })}
+                        placeholder="Đơn giá"
+                        className="h-9 pr-7"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground uppercase">đ</span>
+                    </div>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(item.id)}
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                      disabled={items.length === 1}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="col-span-2 sm:col-span-1 flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeItem(item.id)}
-                    className="size-10 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                    disabled={items.length === 1}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            {items.length === 0 && (
-              <div className="text-center py-10 border-2 border-dashed border-muted rounded-3xl">
-                 <p className="text-sm text-muted-foreground font-medium">Chưa có hạng mục báo giá nào</p>
-              </div>
-            )}
+              ))}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Internal Notes Card */}
-        <Card className="border-none shadow-xl shadow-black/5 bg-card/80 backdrop-blur-md transition-all hover:shadow-black/10">
-          <CardHeader className="pb-3">
-             <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-muted rounded-xl text-muted-foreground">
-                  <ClipboardList className="size-5" />
-                </div>
-                <CardTitle className="text-sm font-black tracking-tight uppercase">Ghi chú nội bộ</CardTitle>
-             </div>
+        <Card className="shadow-sm border-border/60">
+          <CardHeader className="py-3 border-b bg-muted/5">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="size-4 text-muted-foreground" />
+              <CardTitle className="text-xs font-bold uppercase tracking-tight text-muted-foreground">Ghi chú nội bộ</CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              placeholder="Thông tin lưu ý cho kỹ thuật viên hoặc bộ phận kho..."
-              className="bg-muted/30 border-muted-foreground/10 rounded-xl resize-none focus:ring-primary/20"
+              placeholder="Ghi chú cho kỹ thuật viên..."
+              className="resize-none h-16 border-none focus-visible:ring-0 p-0 shadow-none"
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Right Column: Customer & Totals */}
-      <div className="lg:col-span-4 space-y-6">
-        {/* Customer Information Card */}
-        <Card className="border-none shadow-xl shadow-black/5 bg-card/80 backdrop-blur-md overflow-visible transition-all hover:shadow-black/10 ring-2 ring-primary/5">
-          <CardHeader className="bg-primary/5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-lg shadow-primary/20">
-                <User className="size-5" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-black tracking-tight uppercase">Khách hàng</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-bold">Thông tin liên hệ bắt buộc</p>
-              </div>
+      {/* Right Column */}
+      <div className="lg:col-span-4 space-y-5">
+        <Card className="shadow-sm border-border/60 overflow-visible">
+          <CardHeader className="border-b bg-muted/5 py-4">
+            <div className="flex items-center gap-2">
+              <User className="size-4 text-primary" />
+              <CardTitle className="text-sm font-bold uppercase tracking-tight">Khách hàng</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="p-5">
             <CustomerPhoneField
               customers={customers}
               value={customer}
               onChange={setCustomer}
-              label="Tìm kiếm hoặc thêm khách hàng"
+              label="Số điện thoại / Tên khách"
               required
             />
           </CardContent>
         </Card>
 
-        {/* Summary Card */}
-        <Card className="border-none shadow-2xl shadow-primary/10 bg-primary text-primary-foreground overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-10 -mr-10 -mt-10 bg-white/10 rounded-full blur-3xl" />
-          <CardHeader className="pb-4 relative z-10">
-            <CardTitle className="text-sm font-black tracking-widest uppercase opacity-80">Tổng kết phiếu nhận</CardTitle>
+        <Card className="shadow-md border-primary/20 overflow-hidden">
+          <CardHeader className="bg-primary text-primary-foreground py-4">
+             <CardTitle className="text-xs font-bold uppercase tracking-widest opacity-90">Thanh toán & Hẹn trả</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6 relative z-10">
-            <div className="space-y-2">
-               <div className="flex items-center justify-between opacity-80 text-xs font-bold uppercase tracking-wider">
-                  <span>Tổng dự kiến</span>
-                  <Wrench className="size-4" />
-               </div>
-               <div className="text-4xl font-black tracking-tighter">
+          <CardContent className="p-5 space-y-4">
+            <div className="bg-muted/30 p-4 rounded-lg border border-border/40">
+               <div className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Tổng dự kiến chi phí</div>
+               <div className="text-2xl font-black text-primary tracking-tight">
                   {formatVND(estimatedCost)}
                </div>
             </div>
-            
-            <div className="h-px bg-white/20 w-full" />
-            
-            <div className="grid grid-cols-1 gap-4">
-              <Field label="Số tiền đặt cọc (nếu có)" labelColor="text-white/80">
+
+            <div className="space-y-4">
+              <Field label="Số tiền đặt cọc">
                 <div className="relative">
                   <Input
                     type="number"
@@ -450,58 +393,48 @@ export function ServiceForm({
                     value={deposit}
                     onChange={(e) => setDeposit(e.target.value)}
                     placeholder="0"
-                    className="bg-white/10 border-white/20 h-12 rounded-xl focus:ring-white/40 text-lg font-black placeholder:text-white/30 text-white"
+                    className="h-10 pr-7 font-bold"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-white/40 uppercase text-xs">đ</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">đ</span>
                 </div>
               </Field>
               
-              <Field label="Hẹn ngày trả máy" labelColor="text-white/80">
+              <Field label="Ngày hẹn trả">
                 <Input
                   type="datetime-local"
                   value={promisedAt}
                   onChange={(e) => setPromisedAt(e.target.value)}
-                  className="bg-white/10 border-white/20 h-12 rounded-xl focus:ring-white/40 font-bold text-white [color-scheme:dark]"
+                  className="h-10 font-medium"
                 />
               </Field>
 
-              <Field label="Kỹ thuật viên phụ trách" labelColor="text-white/80">
+              <Field label="Kỹ thuật phụ trách">
                 <SelectField
                   value={assignedToId}
                   onValueChange={setAssignedToId}
-                  placeholder="Chọn nhân viên kỹ thuật"
-                  options={technicians.map((t) => ({
-                    value: t.id,
-                    label: t.name,
-                  }))}
-                  className="bg-white/10 border-white/20 h-12 rounded-xl focus:ring-white/40 font-bold text-white"
+                  placeholder="Chưa phân công"
+                  options={technicians.map((t) => ({ value: t.id, label: t.name }))}
+                  className="h-10 w-full"
                 />
               </Field>
             </div>
 
-            <div className="pt-4 space-y-3">
+            <div className="pt-2 space-y-2">
               <Button
                 type="submit"
                 disabled={pending}
-                className="w-full bg-white text-primary hover:bg-white/90 h-14 rounded-2xl font-black uppercase tracking-widest text-base shadow-xl shadow-black/20 transition-all hover:-translate-y-1 active:translate-y-0"
+                className="w-full h-11 text-sm font-bold uppercase tracking-wider"
               >
-                {pending ? (
-                  <Loader2 className="size-5 animate-spin" />
-                ) : (
-                  <>
-                    <Printer className="size-5 mr-2" />
-                    Lưu & In phiếu nhận
-                  </>
-                )}
+                {pending ? <Loader2 className="size-4 animate-spin" /> : <><Printer className="size-4 mr-2" /> Lưu & In phiếu</>}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => router.back()}
                 disabled={pending}
-                className="w-full text-white/60 hover:text-white hover:bg-white/10 h-10 rounded-xl font-bold uppercase text-[10px] tracking-widest"
+                className="w-full h-9 text-xs text-muted-foreground"
               >
-                Huỷ bỏ phiếu này
+                Hủy bỏ
               </Button>
             </div>
           </CardContent>
@@ -515,31 +448,24 @@ function defaultPromisedAt() {
   const d = new Date();
   d.setDate(d.getDate() + 3);
   d.setHours(17, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
+  const pad = (n: number) => String(n).padStart(2, \"0\");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function Field({
   label,
   children,
-  icon,
   required,
-  labelColor = "text-muted-foreground",
 }: {
   label: string;
   children: React.ReactNode;
-  icon?: React.ReactNode;
   required?: boolean;
-  labelColor?: string;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1.5 px-1">
-        {icon && <span className="opacity-50">{icon}</span>}
-        <Label className={cn("text-[11px] font-black uppercase tracking-wider", labelColor)}>
-          {label} {required && <span className="text-destructive">*</span>}
-        </Label>
-      </div>
+    <div className=\"space-y-2\">
+      <Label className=\"text-[11px] font-bold uppercase tracking-wider text-muted-foreground\">
+        {label} {required && <span className=\"text-destructive\">*</span>}
+      </Label>
       {children}
     </div>
   );
