@@ -31,24 +31,29 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export async function getSettings(): Promise<AppSettings> {
-  const s = await prisma.appSetting.findFirst({
-    where: { id: "default" },
-  });
-  
-  if (!s) return DEFAULT_SETTINGS;
-  
-  return {
-    shopName: s.shopName,
-    siteTitle: s.siteTitle,
-    shopTagline: s.shopTagline,
-    shopAddress: s.shopAddress,
-    shopPhone: s.shopPhone,
-    shopEmail: s.shopEmail,
-    logoUrl: s.logoUrl,
-    faviconUrl: s.faviconUrl,
-    printSize: s.printSize,
-    bankId: s.bankId ?? null,
-    bankAccount: s.bankAccount ?? null,
-    bankAccountName: s.bankAccountName ?? null,
-  };
+  try {
+    const s = await prisma.appSetting.findFirst({
+      where: { id: "default" },
+    });
+    
+    if (!s) return DEFAULT_SETTINGS;
+    
+    return {
+      shopName: s.shopName,
+      siteTitle: s.siteTitle,
+      shopTagline: s.shopTagline,
+      shopAddress: s.shopAddress,
+      shopPhone: s.shopPhone,
+      shopEmail: s.shopEmail,
+      logoUrl: s.logoUrl,
+      faviconUrl: s.faviconUrl,
+      printSize: s.printSize,
+      bankId: s.bankId ?? null,
+      bankAccount: s.bankAccount ?? null,
+      bankAccountName: s.bankAccountName ?? null,
+    };
+  } catch (error) {
+    console.error("Failed to fetch settings, using defaults:", error);
+    return DEFAULT_SETTINGS;
+  }
 }
