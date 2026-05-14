@@ -9,7 +9,6 @@ export async function adminLoginAction(email: string, password: string) {
     const user = await login(email, password, {
       userAgent: headersList.get("user-agent"),
       ipAddress: headersList.get("x-forwarded-for") || "127.0.0.1",
-      tenantSlug: null, // Admin login is always on root domain
     });
 
     if (typeof user === "string") {
