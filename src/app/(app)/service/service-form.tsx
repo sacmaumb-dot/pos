@@ -448,7 +448,7 @@ function defaultPromisedAt() {
   const d = new Date();
   d.setDate(d.getDate() + 3);
   d.setHours(17, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, \"0\");
+  const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
@@ -462,9 +462,9 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <div className=\"space-y-2\">
-      <Label className=\"text-[11px] font-bold uppercase tracking-wider text-muted-foreground\">
-        {label} {required && <span className=\"text-destructive\">*</span>}
+    <div className="space-y-2">
+      <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        {label} {required && <span className="text-destructive">*</span>}
       </Label>
       {children}
     </div>
